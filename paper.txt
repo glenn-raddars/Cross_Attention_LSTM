@@ -1,0 +1,1527 @@
+31892
+
+IEEE INTERNET OF THINGS JOURNAL, VOL. 11, NO. 19, 1 OCTOBER 2024
+
+A Spatiotemporal Information-Driven
+Cross-Attention Model With Sparse Representation
+for GNSS NLOS Signal Classification
+Kungan Zeng , Zhenni Li , Haoli Zhao , Kan Xie , Member, IEEE,
+Shengli Xie , Fellow, IEEE, Dusit Niyato , Fellow, IEEE, Wuhui Chen , Member, IEEE,
+and Zibin Zheng , Fellow, IEEE
+
+Abstract—Global navigation satellite systems (GNSSs) provide
+efficient positioning services for location-aware Internet of Things
+(IoT) devices. However, GNSS non-line-of-sight (NLOS) signals
+can result in severe positioning errors in urban canyon areas.
+Existing deep-learning-based NLOS signal classification methods
+cannot appropriately model the spatiotemporal information of
+NLOS interference, resulting in limited accuracy across multiple
+locations. This study presents a spatiotemporal informationdriven model that can capture environmental characteristics and
+signal temporal information simultaneously to improve NLOS
+classification accuracy across multiple locations. First, a visualization analysis of the signal distribution across multiple locations
+demonstrates the impact of environmental characteristics. In
+addition, the significance of both the spatial environmental
+features and the signal temporal features for NLOS classification
+is clarified by constructing a tree diagram of the data set.
+Second, we propose an airspace attention mechanism module
+and a long short-term memory (LSTM)-based temporal feature
+extraction module to model both types of features, respectively.
+Manuscript received 17 May 2024; revised 11 June 2024; accepted
+26 June 2024. Date of publication 4 July 2024; date of current version 25 September 2024. This work was supported in part by the
+National Natural Science Foundation of China under Grant 62273106, Grant
+62203122, Grant 62320106008, Grant 62373114, and Grant 62203123; in
+part by the Guangdong Basic and Applied Basic Research Foundation
+under Grant 2023A1515011480 and Grant 2023A1515011159; and in
+part by the National Key Research and Development Plan-Strategic
+Scientific and Technological Innovation Cooperation Key Project under Grant
+2023YFE0209400. (Corresponding author: Zhenni Li.)
+Kungan Zeng is with the School of Automation, Guangdong University of
+Technology, Guangzhou 510006, China, and also with the School of Software
+and Engineering, Sun Yat-sen University, Zhuhai 519082, China (e-mail:
+zengkg@mail.sysu.edu.cn).
+Zhenni Li is with the School of Automation and the Guangdong–Hong
+Kong–Macao Joint Laboratory for Smart Discrete Manufacturing, Guangdong
+University of Technology, Guangzhou 510006, China (e-mail: lizhenni2012@
+gmail.com).
+Haoli Zhao is with the School of Artificial Intelligence, Hebei University
+of Technology, Tianjin 300401, China (e-mail: zhaohli1989@hotmail.com).
+Kan Xie is with the School of Automation and the Guangdong Key
+Laboratory of IoT Information Technology, Guangdong University of
+Technology, Guangzhou 510006, China (e-mail: kxie@gdut.edu.cn).
+Shengli Xie is with the Key Laboratory of Intelligent Detection and The
+Internet of Things in Manufacturing and the Key Laboratory of Intelligent
+Information Processing and System Integration of IoT, Ministry of Education,
+Guangdong University of Technology, Guangzhou 510006, China (e-mail:
+shlxie@gdut.edu.cn).
+Dusit Niyato is with the School of Computer Science and Engineering,
+Nanyang Technological University, Singapore (e-mail: dniyato@ntu.edu.sg).
+Wuhui Chen and Zibin Zheng are with the School of Software and
+Engineering, Sun Yat-sen University, Zhuhai 519000, China (e-mail: chenwuh@mail.sysu.edu.cn; zhzibin@mail.sysu.edu.cn).
+Digital Object Identifier 10.1109/JIOT.2024.3423016
+
+Third, the learnable sparse regularizer is utilized to reduce
+feature redundancy and thereby realize a sparse representation, which improves model generalization performance. Finally,
+the spatiotemporal information-driven cross-attention model is
+developed to perform NLOS classification, which uses a crossattention fusion strategy to integrate the two modules. We use
+real-world data sets collected across multiple urban canyon
+locations to test our model. Experiments show that the proposed
+model can achieve 98% classification accuracy across multiple
+locations. Generalization performance in unknown environments
+can be improved over 7% compared to several state-of-the-art
+models.
+Index Terms—Global navigation satellite systems (GNSSs),
+long short-term memory (LSTM), sparse representation, spatiotemporal information, transformer.
+
+I. I NTRODUCTION
+OCATION awareness has become an essential requirement for various Internet of Things (IoT) applications
+[1]. Global navigation satellite systems (GNSSs), such as GPS,
+Galileo, GLONASS, and BDS, have played a crucial role in
+providing accurate and robust positioning services for IoT
+applications in outdoor environments, making them a costeffective location solution [2], [3]. Nevertheless, the quality
+of received GNSS signals is easily affected by surrounding environments. Although most interference errors (e.g.,
+atmospheric delays, satellite orbit bias, and satellite clock
+errors) can be mitigated by statistical methods or differencing,
+the interference caused by non-line-of-sight (NLOS) signals
+or polluted line-of-sight (LOS) signals remains a challenge.
+Particularly in urban canyons, NLOS interference introduces
+an unexpected bias to GNSS measurements, deteriorating
+positioning accuracy [4], [5]. The reception of NLOS signals
+occurs when the propagation path of satellite signals is
+obstructed by high-rise builds. Because of the extra transmission path, NLOS signals can generate severe positioning
+errors [6], [7]. Hence, discriminating NLOS signals is crucial
+to reducing NLOS interference error in GNSS positioning.
+Usually, NLOS signals can be distinguished by satellite elevation angle (EL) or signal strength. However, it
+is easy to make incorrect distinctions when dealing with
+complex urban canyon environments. For example, NLOS
+multipath interference may result in the received NLOS signal
+strength being close to the received LOS signal strength.
+
+L
+
+c 2024 IEEE. Personal use is permitted, but republication/redistribution requires IEEE permission.
+2327-4662 
+See https://www.ieee.org/publications/rights/index.html for more information.
+Authorized licensed use limited to: Southeast University. Downloaded on March 24,2026 at 08:23:58 UTC from IEEE Xplore. Restrictions apply.
+
+ZENG et al.: SPATIOTEMPORAL INFORMATION-DRIVEN CROSS-ATTENTION MODEL WITH SPARSE REPRESENTATION
+
+A slim, high-rise building might block the satellites with
+high ELs. Many studies have addressed this problem using,
+for example, 3DMA shadow matching [8], [9] and 3-D ray
+tracing [10], [11]. However, these methods involve creating
+3-D models of buildings, which requires an abundance of
+computational resources. Recently, machine-learning methods
+have been proposed as a tool for classifying GNSS satellite signals, such as decision trees (DTs), support vector
+machines (SVMs), and artificial neural networks (ANNs) [12].
+The existing studies can be divided into two categories
+depending on the input resource, correlator-based approaches
+and GNSS measurement-based approaches [13]. Although
+correlator-based approaches [13], [14], [15] perform well
+in GNSS signal classification, the correlator output must
+be obtained through software-defined reception (SDR). In
+contrast to correlator-based approaches, GNSS measurementbased approaches can utilize observation features obtained
+directly from GNSS receivers (e.g., carrier-to-noise, phase,
+and pseudorange residual) to perform the classification. For
+example, Hsu [12] used machine-learning methods to perform
+GNSS signal classification based on GNSS measurements. A
+convolutional neural network (CNN)-based multipath detection method for GPS high-precision positioning is presented
+in [16]. As a data-driven approach, deep-learning algorithms
+need sufficient features to be able to learn sample distributions. However, the limited observation features of satellite
+signals cannot accurately reflect NLOS/multipath interference
+when facing complex environmental conditions [17]. Deeplearning-based methods cannot then achieve satisfactory
+classification accuracy across multiple locations or different
+scenes [16], [18].
+NLOS interference is influenced by both the incident satellite signal and the surrounding environment. The continuous
+movement of satellites alters the incidence status of the
+signals, leading to dynamic changes in NLOS interference
+over time, which we refer to as “signal temporal features”
+in this study. Furthermore, since the physical spatial environment determines the propagation path of satellite signals,
+the measurements of captured satellite signals at the same
+epoch can reflect the environmental context [19], [20], which
+we call the “spatial environmental features” in this study.
+Some current studies focus on learning the instantaneous
+features of signals for NLOS classification [12], [21], while
+others utilized the temporal information of signals to perform multipath/NLOS classification [22], [23]. Additionally,
+existing research has shown that incorporating environmental
+information can enhance NLOS signal classification models
+[24]. However, when dealing with NLOS classification across
+multiple locations, both the signal temporal features and
+the spatial environmental features are present simultaneously.
+Failing to represent both of these features can limit the
+classification accuracy of models. To our knowledge, no
+existing studies explicitly propose to model the spatiotemporal
+information of NLOS interference from GNSS measurements to address NLOS signal classification across multiple
+locations.
+In this study, a spatiotemporal information-driven crossattention model with sparse representation is proposed to
+
+31893
+
+perform NLOS classification across multiple locations. First,
+a visualization analysis of NLOS and LOS signal distributions across multiple locations is conducted to demonstrate
+the impact of surrounding environmental characteristics. In
+addition, the significance of the spatial environmental features
+and signal temporal features in NLOS signal classification is
+clarified by constructing a tree diagram. Second, we propose
+using an airspace attention mechanism (AAM) module and
+an long short-term memory (LSTM)-based temporal features
+extraction (LSTM-TFE) module to learn the representation
+of the spatial environmental features and signal temporal
+features, respectively. Third, the learnable sparse regularizer
+is adopted to reduce feature redundancy and thereby realize a
+sparse representation, which improves the model’s generalization performance. Finally, a spatiotemporal information-driven
+cross-attention model with sparse representation is developed
+to perform NLOS signal classification using a cross-attention
+fusion strategy to integrate the two modules. We use real-world
+data sets, which are collected across multiple urban canyon
+locations, to test the model’s performance. Experiments show
+that the proposed model can achieve 98% classification accuracy across multiple locations. Generalization performance
+in unknown environments can be improved by more than
+7% compared to several state-of-the-art models. The main
+contributions of our work are summarized as follows.
+1) To model the spatiotemporal information of NLOS signals, we propose constructing both a spatial channel and
+a temporal channel within the model. The spatial channel
+utilizes the measurements of all captured satellite signals
+at the current epoch as input, while the temporal channel
+utilizes the historical measurements of each satellite as
+input. We then develop the AAM module to extract spatial environmental features from satellite sets/sequences
+and introduce the LSTM-TFE module to capture signal
+temporal features from historical epochs.
+2) To reduce feature redundancy, we propose using the
+learnable sparse regularizer to obtain a sparse representation of the representation vectors. This enables
+the model to focus on critical features and improve
+model generalization performance in other unknown
+urban canyon environments.
+3) Based on the spatiotemporal information obtained by the
+two modules and the learnable sparse regularizer, the
+spatiotemporal information-driven cross-attention model
+with sparse representation is developed by using a crossattention fusion strategy to integrate the two modules.
+The proposed model obtains environmental characteristics and signal temporal information simultaneously to
+perform NLOS classification. Experiments show that it
+can achieve 98% classification accuracy across multiple
+locations. Generalization performance in unknown environments can be improved over 7% compared to several
+state-of-the-art models.
+The remainder of this article is organized as follows.
+Section II addresses related work. Section III gives a detailed
+introduction to our model. Section IV demonstrates experimental studies comprehensively. Section V concludes this
+article.
+
+Authorized licensed use limited to: Southeast University. Downloaded on March 24,2026 at 08:23:58 UTC from IEEE Xplore. Restrictions apply.
+
+31894
+
+IEEE INTERNET OF THINGS JOURNAL, VOL. 11, NO. 19, 1 OCTOBER 2024
+
+Fig. 1.
+Four static locations for GNSS data collection in Guangzhou
+urban canyons. For the Earth-centered, Earth-fixed coordinate system (ECEF),
+the coordinate of location 1 is (−2322470.13, 5389797.18, 2489382.04).
+Location 2 is (−2322304.29, 5389659.43, 2489578.83). Location 3 is
+(−2322456.76, 5389755.08, 2489415.00). Location 4 is (−2322405.67,
+5389818.94, 2489474.12).
+
+II. R ELATED W ORK
+Previous studies have mainly tried to use machine-learning
+methods to learn the representation of signals’ instantaneous
+or temporal features from the correlator or GNSS measurements to perform signal recognition [13]. In [14] and [25],
+the correlator outputs are mapped as 2-D images and fed
+to a CNN for multipath detection. Considering the shape
+of the multicorrelator outputs is distorted due to multipath
+interference, Suzuki and Amano [15] used SVM and ANN
+to extract features to discriminate NLOS/multipath signals.
+Hsu [12] used SVM to classify LOS, NLOS, and multipath
+signals by several features (e.g., signal-to-noise ratio and
+pseudorange residuals) as the input. These studies above focus
+on learning the instantaneous features of the target signal
+to perform classification. Considering the temporal variation
+of signals, Quan et al. [16] proposed using current and
+n − 1 previous successive observations to detect multipath
+interference in the latest observation. Tao et al. [22] presented
+a CNN-LSTM model to learn the deep multipath features
+from coordinate series to predict positioning error in GNSS
+short baseline positioning. However, the dynamic change
+of the surrounding environment raises a challenge to the
+classification performance of models across multiple locations.
+The GNSS measurements of captured satellites at the same
+epoch reflect the surrounding environmental characteristics,
+which can contribute to location context prediction. For
+example, Gao and Groves [19] presented an environmental
+context detection framework for adaptive navigation, which
+uses a hidden Markov model to extract features from measurements to predict the current environment context categories.
+Xu et al. [20] presented a sky visibility estimation based on
+GNSS satellite visibility, which utilizes GNSS measurements
+and ephemeris data to estimate sky outline, building outline,
+and building boundary. Moreover, Zhang et al. [24] first
+
+Fig. 2. NLOS and LOS signals’ distribution at four locations. (The feature
+space is built based on EL, carrier-to-noise (C/N0 ), and pseudorange residual.)
+(a) Location 1. (b) Location 2. (c) Location 3. (d) Location 4.
+
+proposed to use the LSTM network to learn environmental
+information from captured satellites at the same epoch to aid
+the prediction of satellite visibility. Li et al. [26] suggested
+employing a Transformer-based network for NLOS classification. These studies proved the significance of learning
+environmental features in NLOS classification. Nevertheless,
+existing studies still focus on the representation of a single
+aspect feature.
+In this study, we propose a spatiotemporal informationdriven model to simultaneously learn signal temporal features
+and spatial environmental features, aiming to improve NLOS
+signal classification across multiple locations. The proposed
+model utilizes the AAM module and the LSTM-TFE module
+to capture these features. We then employ a cross-attention
+fusion strategy to integrate the outputs of the two modules.
+Additionally, we adopt a learnable sparse regularizer to reduce
+feature redundancy, enhancing the model’s generalization
+performance.
+III. S PATIOTEMPORAL I NFORMATION -D RIVEN
+C ROSS -ATTENTION M ODEL W ITH S PARSE
+R EPRESENTATION
+In this section, we first visualize the distribution of GNSS
+signals (NLOS and LOS) collected across multiple urban
+canyon locations to demonstrate the impact of environmental
+characteristics and clarify the significance of both the spatial
+environmental features and the signal temporal features in
+NLOS recognition by constructing a tree diagram. Next,
+we present an AAM module and an LSTM-TFE module to
+learn the representation of the spatial environmental features
+and signal temporal features, respectively. Then, a learnable
+sparse regularizer is adopted to reduce the feature redundancy
+and improve the model’s generalization performance. Finally,
+a spatiotemporal information-driven model is developed by
+
+Authorized licensed use limited to: Southeast University. Downloaded on March 24,2026 at 08:23:58 UTC from IEEE Xplore. Restrictions apply.
+
+ZENG et al.: SPATIOTEMPORAL INFORMATION-DRIVEN CROSS-ATTENTION MODEL WITH SPARSE REPRESENTATION
+
+Fig. 3.
+
+31895
+
+Mixed distribution of NLOS and LOS signals from four locations.
+TABLE I
+N OTATION
+
+Fig. 4.
+
+Tree diagram construction of the data set from multiple locations.
+
+Fig. 5.
+
+Illustration of the LSTM-based temporal feature extraction module.
+
+using a cross-attention fusion strategy to integrate the two
+modules.
+A. Notation
+In this article, we denote boldface uppercase letter W as a
+weight matrix. b denotes the bias. Most of the notations have
+been clarified in the main text or corresponding figures. Some
+important notations are listed in Table I.
+B. Analysis of NLOS and LOS Signal Distributions Across
+Multiple Locations
+We visualized the distribution of NLOS and LOS signals
+from multiple urban canyon locations to demonstrate the
+impact of environmental characteristics. As shown in Fig. 1,
+we collected GNSS signals at four locations on two streets.
+The labels of signals are determined by a fish-eye camera [26].
+We obtained observation features (EL, carrier-to-noise, and
+pseudorange residual) from GNSS measurements. These features can represent NLOS interference well and are often
+considered as input to NLOS detection models [18]. Here, we
+build a feature space using these three features to visualize
+signal distribution. As shown in Fig. 2, the sample distributions of location 1 and location 2 are partially similar. The
+same case is for location 3 and location 4. The GNSS signals
+from the same street show a partially similar distribution due
+to the similar surrounding environment. However, location 1
+
+and location 2 differ exactly from location 3 and location 4
+as the environmental characteristics vary. As shown in Fig. 3,
+the distributions of NLOS and LOS become complicated when
+all samples are projected into the same feature space. We can
+find that the overlap of NLOS and LOS samples is apparent
+in the feature space. Based on the above observation, some
+key points can be summarized as follows.
+1) The surrounding environmental characteristics of locations have a crucial impact on the distribution of NLOS
+and LOS signals.
+2) GNSS signals with different labels from multiple locations can easily have highly similar practical-valued
+
+Authorized licensed use limited to: Southeast University. Downloaded on March 24,2026 at 08:23:58 UTC from IEEE Xplore. Restrictions apply.
+
+31896
+
+IEEE INTERNET OF THINGS JOURNAL, VOL. 11, NO. 19, 1 OCTOBER 2024
+
+vectors when using observation features as the input,
+which easily results in recognition failure for models.
+Consequently, deep-learning-based models cannot achieve
+satisfactory classification accuracy across multiple locations
+when the target signal’s observation features are as input. To
+improve NLOS classification across multiple locations, it is
+essential to extract environmental characteristics from GNSS
+measurements.
+C. Data Construction Analysis Using Tree Diagram
+To motivate our study, we construct a tree diagram of
+the data set to demonstrate the significance of both the
+spatial environmental features and signal temporal features in
+NLOS recognition. The data set D = {D1 , D2 , D3 , . . . , Dm }
+is collected at m locations, and t epochs are recorded at each
+location. We can get the epoch sets Di = {e1 , e2 , e3 , . . . , et }.
+The number of GNSS signals captured at each epoch is n. The
+satellite set/sequence at each epoch is ej = {s1 , s2 , s3 , . . . , sn }.
+For each satellite, we can get a list of observation features [EL, azimuth (Az), . . . , carrier-to-noise (C/N0 )] from
+GNSS measurements, namely, the instantaneous features. The
+instantaneous features in GNSS measurements represent the
+observation characteristics at the current epoch. Since these
+features are discrete in the time dimension, we refer to them as
+instantaneous features. Thus, the data set D tree diagram can
+be constructed as Fig. 4. As mentioned in Section III-B, when
+only using the instantaneous features as the input of models, it
+is easy to find two different types of signals with highly similar
+practical-valued vectors, which will result in the failure of
+correct recognition. Therefore, to improve NLOS classification
+across multiple locations, extending additional features to
+enhance the representation of signals is crucial. In other words,
+we must enlarge the distance between samples in the feature
+space to avoid overlap. From the tree diagram of the data
+set, each sample in the tree structure contains three levels of
+features: 1) signal temporal features; 2) spatial environmental
+features; and 3) instantaneous features. Most studies only
+consider the instantaneous features as the input. However,
+the single-level feature makes it challenging to express the
+specificity of samples in the data set structure. Furthermore,
+as another point summarized in Section III-A, the location’s
+environmental characteristics mainly decide the distribution
+of GNSS signals. Thus, adding the signal temporal features
+and the spatial environmental features can aid the model in
+performing recognition more precisely. Generally, to improve
+NLOS classification across multiple locations, the proposed
+model should fulfill some key requirements as follows.
+1) The model is able to extract the signal temporal features
+from signal historical epochs. It can identify the category
+of the target signal at the current epoch by referring to
+historical information.
+2) The model can learn a reasoned representation of environmental characteristics from the satellite set/sequence,
+thereby learning the spatial environmental features to
+facilitate signal classification.
+3) The fusion of both types of features is crucial for
+allowing the model to adapt to dynamic changes in both
+
+environments and incident signal status. It is necessary
+to adopt an effective fusion strategy. In addition, combining features from multiple domains easily results in
+feature redundancy, which decreases model generalization performance. Therefore, reducing redundancy is an
+important issue for the model.
+Therefore, our following work will be motivated by these
+requirements.
+D. LSTM-Based Temporal Feature Extraction Module
+The observation values of LOS signals are usually more
+stable because the propagation path is almost consistent in
+physical spatial. On the contrary, the propagation path for
+NLOS signals is complex. When the angle of the signal
+changes, the observation values also change immediately.
+Therefore, the signal temporal features can reflect NLOS
+interference. Motivated by related works [23], we develop an
+LSTM-TFE module to capture signal historical information.
+As shown in Fig. 5, we first obtain the historical epochs of
+the target signal (x1 , x2 , . . . , xt ). A fixed-length slide window
+intercepts the epoch segment (xt−n , . . . , xt−1 , xt ) from the
+previous n epochs to the current epoch. We then construct
+a temporal feature extraction module to learn historical
+information from the segment. LSTM networks, as a kind
+of recurrent neural network (RNN), can learn long-term
+dependencies, which is widely used to address the information
+persistence problem in various deep-learning tasks [27]. Here,
+we utilize LSTM networks to understand the temporal changes
+of signals and compress them in the time domain to gain the
+representation vector ht , thereby helping the model identify
+the type of the target signal at the current epoch based on
+historical information.
+E. Airspace Attention Mechanism Module
+The surrounding environment of locations has a significant
+impact on received GNSS signals. When the high-rise building
+in urban canyons blocks the direct path from satellites to
+the GNSS receiver, the receiver will capture NLOS signals
+instead of LOS signals. Thus, the sky occlusion situation above
+positions is a crucial factor in determining the category of
+received signals. In other words, the distribution of NLOS
+and LOS signals on the sky view of the current position
+reflects environmental characteristics. As the exact distribution
+of NLOS and LOS signals is unknown, we compute the
+relevance among satellite signals to express the distribution
+status. We therefore present the AAM to obtain environmental
+characteristics. As shown in Fig. 6, we proposed using the
+self-attention mechanism to compute the relevance among
+satellite signals [26]. The self-attention mechanism has been
+successfully used to learn the abstract representation between
+words in natural language sequences [28]. This study regards
+all captured satellites in the current epoch as a sequence.
+The self-attention module can determine attention weight
+among satellite signals by computing their similarity in hidden dimensions. First, we obtain the satellite set/sequence
+in each epoch. An embedding layer is used to extend the
+dimension size of feature vectors. Next, the embedded vectors
+
+Authorized licensed use limited to: Southeast University. Downloaded on March 24,2026 at 08:23:58 UTC from IEEE Xplore. Restrictions apply.
+
+ZENG et al.: SPATIOTEMPORAL INFORMATION-DRIVEN CROSS-ATTENTION MODEL WITH SPARSE REPRESENTATION
+
+Fig. 6.
+
+31897
+
+Illustration of the airspace attention module. The sky view represents the boundary between buildings and the open sky.
+
+(a1 , a2 , a3 , . . . , an ) will be transferred to the self-attention
+block. In the self-attention mechanism, each input will be
+mapped into query (q), key (k), and value (v) by linear
+projections. We compute the dot products of the query with
+all keys to get the output (a1,1 , a1,2 , a1,3 , . . . , a1,n ). Then, the
+output will be conducted by a scale and softmax operation
+to gain the attention weight (a1,1 , a1,2 , a1,3 , . . . , a1,n ). In the
+AAM, the attention weight can express the status of the current
+sky view, because it is obtained by computing the relevance
+between satellite signals in classification learning. Finally, the
+airspace attention representation vectors (f1 , f2 , f3 , . . . , fn ) can
+be obtained by computing the dot products of the attention
+weight with the corresponding value (v).
+F. Learnable Sparse Regularizer for Reducing Feature
+Redundancy
+This study proposes to associate environmental characteristics and signal temporal information to boost NLOS
+classification. There is a high risk of feature redundancy
+when combining features from multiple domains, which can
+decrease the model’s generalization performance. Sparse representation can improve the robustness and stability of neural
+networks by focusing on some crucial features [29], [30]. It
+has been widely used in the fields of signal processing and
+computer vision [31], [32]. Therefore, in this study, a learnable
+sparse regularizer [33] is used to reduce feature redundancy
+by imposing a constraint on the activation function. The
+learnable sparse regularizer is able to learn data-driven sparse
+representations, which is defined as
+⎧
+2 
+
+w1 (b2 −b1 )
+1
+1
+⎪
+z+
+−
++
+b
+−
+⎪
+2
+2w
+2
+w
+⎪
+2
+⎪
+⎨ w1 (w21 −w2 )
+2
+(1)
+Sp(z) =  2w2 (b2 − b1 ) , z ≥ w1 (b2 − b1 )
+⎪
+1
+1 2
+⎪
+z
+−
++
+b
+z,
+0
+≤
+z
+<
+w
+−
+b
+(b
+)
+⎪
+1
+1
+2
+1
+2w
+2
+⎪
+1
+⎩
+Sp(−z), z < o
+
+where w1 , w2 , b1 , and b2 are the learnable parameters. In
+neural network models, the regularizer can be considered an
+activation function (z), which can be given as
+⎧
+w2 (z − b2 ) + w1 (b2 − b1 ), b2 ≤ z
+⎪
+⎪
+⎪
+⎪
+⎨ w1 (z − b1 ), b1 ≤ z < b2
+ = 0, −b1 ≤ z < b1
+(2)
+⎪
+⎪
+⎪ w1 (z + b1 ), −b2 ≤ z < −b1
+⎪
+⎩
+w2 (z + b2 ) + w1 (b1 − b2 ), z < −b2
+where the learned parameters w1 , w2 , b1 , and b2 are updated
+with the weight matrix of the model simultaneously. For a
+better sparsity performance, we conduct the Sp(z) operation
+three times. Namely, the output of the previous layer is the
+input of the next layer. The learned parameters need to satisfy
+w1 , w2 > 0, 0 ≤ b1 ≤ b2 and Sp(z) is nondecreasing when
+z ≥ w1 (b2 − b1 ).
+G. Spatiotemporal Information-Driven Model Based on
+Cross-Attention Fusion Strategy
+The proposed AAM module and LSTM-TFE module can
+extract the spatial environmental features and the signal temporal features from GNSS measurements, respectively. The next
+critical step is to fuse both types of features. For deep-learning
+models, a direct way to combine features is to concatenate representation vectors. However, the concatenation cannot enable
+two features from different domains to interact effectively [34].
+The temporal features are extracted from the historical data of
+the target satellite. The spatial features are computed using all
+other satellites at the current epoch. Thus, we need to align
+the features from different domains for a reasoned fusion.
+Motivated by the cross-attention transformer [35], [36], [37],
+we propose using a cross-attention fusion strategy to integrate
+both types of features. The cross-attention fusion strategy
+utilizes the temporal domain features as the query to compute
+the attention weight with the key–value pairs from the spatial
+
+Authorized licensed use limited to: Southeast University. Downloaded on March 24,2026 at 08:23:58 UTC from IEEE Xplore. Restrictions apply.
+
+31898
+
+Fig. 7.
+
+IEEE INTERNET OF THINGS JOURNAL, VOL. 11, NO. 19, 1 OCTOBER 2024
+
+Illustration of the spatiotemporal information-driven cross-attention model with sparse representation.
+
+domain. The fused features can be obtained by the multihead
+attention (MHA) block.
+Based on the cross-attention fusion strategy, we develop a
+spatiotemporal information-driven cross-attention model with
+sparse representation, as shown in Fig. 7. First, we construct
+corresponding input channels for two proposed modules. The
+captured satellite sets/sequences in each epoch are the input
+of the AAM module, which is called the spatial channel.
+The target signal’s historical n epochs are the input of
+the LSTM-TFE module, namely, the temporal channel. We
+utilize the LSTM-TFE module to learn the temporal features
+from the historical data. The LSTM networks can memorize
+helpful information in each epoch and generate the hidden
+state by compressing the input dimension. The representation
+vector of the temporal features contains the signal’s historical
+information and the instantaneous features. Note that the
+embedding layer is contained in the LSTM network cell. At the
+same time, the spatial channel transfers the satellite sequence
+to the Embedding layer for extending the dimension size of
+feature vectors. The AAM module will compute the attention
+weight among signals by the MHA block. The remaining
+components of the AAM module are the same as the base
+transformer’s encoder structure. We thus can obtain the signal
+temporal features and spatial environmental features from the
+two modules. Next, the representation vector of the signal
+temporal features will be regarded as the query of the MHA
+block. The representation vector of the spatial environmental
+features will be used as the key–value pairs. The MHA
+block conducts fusion processing. Then, the fused feature
+representation vector is transferred to a sparse regularization
+block to solve the feature redundancy problem. Finally, the
+Classifier gives a prediction for the target signal.
+
+For a signal sample s(a1 , a2 , a3 , . . . , ai ), where ai means
+the observation feature selected from GNSS measurements.
+We then construct two input channels. The temporal channel
+is T(st−n , . . . , st−1 , st ). The spatial channel can be denoted
+as S(s1 , s2 , s3 , . . . , sk ). Note that k is the number of captured
+satellite signals, and k = 3 in Fig. 7 is just for convenient
+illustration. As shown in Fig. 5, each step in the LSTM-TFE
+module can be formulated as
+
+ft = σ W f ht−1 , st + bf
+
+it = σ W i ht−1 , st + bi
+
+Ct = tanh W C ht−1 , st + bC
+
+(3)
+(4)
+
+Ct = ft  Ct−1 + it  Ct
+
+ot = σ W o ht−1 , st + bo
+
+(6)
+(7)
+
+ht = ot  tanh Ct
+
+(8)
+
+(5)
+
+where ft is the output of the forget gate layer, which decides
+what should be overlooked in the previous cell state Ct−1 .
+σ denotes sigmoid activation function. W f and bf are the
+weight matrix of the layer and bias.  denotes element-wise
+multiplication. Ct is the new content from the current input.
+it controls how much information will be selected from Ct .
+Ct and it compose the input gate layer. Then, the current cell
+state Ct can be updated by these two gates. ot decides the
+output ht , which is the output gate layer. After the n steps, the
+LSTM-TFE module can generate the representation vector of
+the temporal features ht , where the historical information is
+contained [38].
+For the AAM module, the spatial channel input
+S(s1 , s2 , s3 , . . . , sk ) is first transferred to the embedding layer,
+
+Authorized licensed use limited to: Southeast University. Downloaded on March 24,2026 at 08:23:58 UTC from IEEE Xplore. Restrictions apply.
+
+ZENG et al.: SPATIOTEMPORAL INFORMATION-DRIVEN CROSS-ATTENTION MODEL WITH SPARSE REPRESENTATION
+
+31899
+
+Fig. 8. Illustration of location distribution. We collected data from multiple urban canyon locations, marking red points for the training set and blue points
+for the test set. The demonstrated four locations are contained in the test set in the out-domain data set.
+
+Next, the matrices Q, K, and V are inputted to the Scale DotProduct Attention, which can be formulated as
+
+QK T
+V.
+(11)
+Attention(Q, K, V) = softmax √
+dk
+Then, the output of heads will be concatenated together and
+transferred to a linear projection, which can be formulated as
+MultiHead(Q, K, V) = Concat(H1 , . . . , Hh )W l
+
+Hi = Attention Qi , K i , V i
+
+Fig. 9.
+Illustration of location distribution for GNSS data collection in
+Guangzhou urban canyons. The sky images recorded by the fish-eye camera
+display the open sky and blocked areas. These five locations are the training
+set in the out-domain data set.
+
+which can be given as
+X = W em S + bem
+
+(9)
+
+where W em denotes the embedding layer weight matrix, and
+bem is the bias. We can get the mapping result X. The AAM
+module is based on the encoder of the transformer. The selfattention mechanism is realized with the MHA block. The q, k,
+and v come from the same resource X and are obtained by the
+Linear projections. The MHA block computes the attention
+function on a set of them simultaneously, packed together into
+matrices Q, K, and V. It can be given as
+Q = W q X + bq
+V = W v X + bv .
+
+Fin = Norm(X + MultiHead(X))
+Fout = θ FN (Fin )
+hs = Norm(Fout + Fin )
+
+(14)
+(15)
+(16)
+
+where Norm denotes the layer normalization operation. θ FN
+denotes the function of the Feed Forward Network, Fin denotes
+its input, and Fout is the output. The fusion processing is realized
+by the MAH block. As mentioned previously, the LSTM-TFE
+module can extract the temporal features of the target signal
+and generate the alignment point by compressing the temporal
+dimension. Therefore, we consider the representation vector of
+the temporal features as the query, and the output of the AAM
+module as the key–value pairs. The self-attention mechanism
+is employed to realize the interaction between spatial features
+and temporal features. It is given as follows:
+q
+
+(10)
+
+(13)
+
+where W l is the weight matrix of the linear layer. Hi is
+the output of heads. h denotes the number of heads. Finally,
+the output of the MAH block goes through the Add&Norm
+operation and the Feed Forward network to generate the
+representation vector of the spatial environment features hs .
+The process can be formulated as
+
+Q = W · ht + bq
+
+K = W k X + bk
+
+(12)
+
+k
+
+K = W · hs + bk
+
+Authorized licensed use limited to: Southeast University. Downloaded on March 24,2026 at 08:23:58 UTC from IEEE Xplore. Restrictions apply.
+
+31900
+
+IEEE INTERNET OF THINGS JOURNAL, VOL. 11, NO. 19, 1 OCTOBER 2024
+
+TABLE II
+D ESCRIPTION OF DATA S ETS
+
+v
+
+V = W · hs + bv
+
+Z = MultiHead Q, K, V .
+
+(17)
+(18)
+
+For the next step, we impose a learned sparse regularizer [33] on the output of fusion block Z. The detailed
+formulation can be found in Section III-F. The Classifier
+consists of three fully connected layers. Since the task is binary
+classification, we adopt the sigmoid function as the activation
+function of the final layer in Classifier. The loss is computed
+with the cross-entropy formulation. Thus, the loss function can
+be given as
+1
+{yi log y(xi ) + (1 − yi ) log(1 − y(xi )}
+=−
+N
+N
+
+(19)
+
+i=1
+
+where y represents the formulation of the model. xi is the input
+of the model, and yi is the corresponding label. Mini-batch
+gradient descent is adopted to optimize the loss function [39].
+IV. E XPERIMENTAL S TUDY
+In this section, data preparation is first introduced. We
+construct two data sets for experiments: the in-domain data
+set and the out-domain data set. In addition, to clarify feature
+selection processing, we analyze the distribution of observation
+values used as input features. Second, we provide some implementation details including training settings and evaluation
+metrics. Third, we conduct model variation by changing the
+shape of the networks to find reasoned hyperparameters for the
+model. Fourth, we implement a comparative experiment using
+several existing models. The comparison results are shown
+and analyzed. After that, we conduct ablation experiments by
+changing the fusion strategy and moving out of the sparse
+optimization block. Finally, we investigate the significance
+of the time length of the temporal channel on classification
+performance.
+A. Data Preparation
+We collected real-world data from multiple urban canyon
+locations in Guangzhou, China. The GNSS measurements of
+multiple constellation systems, including Beidou, GPS, and
+Galileo, are recorded by two GNSS receivers (Ublox F9P) with
+professional external antennas. A reference station and a rover
+station are built with two receivers to perform differencing.
+In our previous work, we presented a GNSS signal labeling
+method based on fish-eye camera projection to distinguish
+NLOS and LOS signals [26]. As shown in Figs. 8 and 9, we
+collected GNSS satellite signals from a total of 27 locations.
+
+These locations were selected from different streets, each
+exhibiting distinct sky occlusions, indicating varying levels of
+environmental interference. We constructed two experimental
+data sets: 1) an in-domain data set and 2) an out-domain
+data set. The in-domain data set includes training and test
+data from the same locations, allowing us to evaluate the
+model’s classification performance across multiple locations.
+The ratio of training to test data in this data set is 7:3. The outdomain data set uses data from 22 locations for the training
+set and five different locations for the test set. The training
+and test sets are sourced from different streets, which helps us
+assess the model’s generalization performance in unfamiliar
+environments. Table II provides a detailed description of these
+data sets.
+Traditional methods usually use C/N0 or El to determine
+NLOS signals. Nevertheless, the distribution of these observation values shows a complex case in urban canyons. As shown
+in Fig. 10, the C/N0 of NLOS signals mainly focus on 30 dB.
+For half of LOS signals, C/N0 is more than 35 dB. However,
+the overlap still exists between 30 and 35 dB, which results in
+failure distinction on them. Similarly, the EL cannot give an
+accurate distinction between NLOS and LOS signals. From the
+distribution of pseudorange residual (PRE), NLOS and LOS
+signals show a similar pattern. And the PRE of LOS signals
+is usually close to 0. It can help us to identify signal types.
+Generally, these crucial observation features partly reflect
+the difference between NLOS and LOS signals. A single
+observation feature is insufficient for accurately recognizing
+NLOS signals. Therefore, this study uses several observation
+features selected from GNSS measurements to identify NLOS
+signals. The selected features consist of carrier-to-noise, EL,
+azimuth angle, and pseudorange residual. We conducted a
+feature scaling operation to enable model learning to be more
+stable.
+1) Carrier-to-noise ratio denotes the noise power density
+at the receiver front-end, which is the received signal’s
+strength. It reflects the quality of received signals. In
+most cases, the strength of LOS signals is stronger than
+NLOS signals.
+2) The EL is widely used to determine the reference
+satellite during GNSS positioning. The satellite with a
+higher EL is less probably to be blocked by obstacles.
+It means that the EL is related to the types of satellites.
+The EL can be estimated based on El = arcsin(ûsv /r̂).
+ûsv is the length of the “Up” component of the satellite
+position in East–North–Up (ENU) coordinate to the
+receiver position, and r̂ is the range between the satellite
+and receiver.
+3) The azimuth angle is another important feature that
+indicates the spatial location of satellites. It is useful to
+compute the relevance between satellites in this study.
+Az = arctan(êsv /n̂sv ). êsv and n̂sv are the lengths of the
+East and North components of the satellite position in
+the ENU coordinate relative to the receiver position.
+4) The pseudorange residual is considered one of the
+features as it reflects the NLOS error caused by the environment. The iterative least squares estimation method
+is widely used to calculate the GNSS receiver position,
+
+Authorized licensed use limited to: Southeast University. Downloaded on March 24,2026 at 08:23:58 UTC from IEEE Xplore. Restrictions apply.
+
+ZENG et al.: SPATIOTEMPORAL INFORMATION-DRIVEN CROSS-ATTENTION MODEL WITH SPARSE REPRESENTATION
+
+31901
+
+Fig. 10. C/N0 , EL, and pseudorange residual of four locations. (The first row is the distribution of C/N0 at four locations. The second row is EL. The third
+row is pseudorange residual.)
+
+which can be formulated as x = (H T H)−1 H T  ρ. x
+includes the bias from the initial guess and the receiver
+clock. H is usually referred to as the geometry matrix.
+ρ is the vector of the difference between pseudorange
+measurements and geometric distance from the initial
+guess to the satellites. All available measurements will
+be used to optimize the result by iterative methods [40].
+The convergence is determined by the pseudorange
+residual as ε = ρ − H · x.
+B. Implementation Details
+1) Training Settings: Our networks are built with the
+TensorFlow framework. All experiments are implemented on
+a server with two NVIDIA GeForce RTX 3090 Ti 12-GB
+GPUs. The batch size is 16. We adopt the Adam [41] optimizer
+to update model parameters. For the Adam optimizer, the
+arguments, β1 and β2 , are set as 0.9 and 0.98. The learning
+rate is 0.001.
+2) Evaluation Metrics: To validate the performance of
+trained models, we use Accuracy, Recall, Precision, and
+F1 scores for comprehensive evaluation [42], which are formulated as follows:
+TP + TN
+TP + TN + FP + FN
+TP
+Precision =
+TP + FP
+TP
+Recall =
+TP + FN
+
+Accuracy =
+
+(20)
+(21)
+(22)
+
+F1 =
+
+2 × precision × recall
+.
+precision + recall
+
+(23)
+
+Performance measurement true positive (TP), true negative
+(TN), false positive (FP), and false negative (FN) are the
+parameters used in the evaluation of specificity, sensitivity,
+and accuracy. TP is the number of LOS signals correctly
+recognized by the model. Similarly, TN is the number of
+NLOS signals correctly recognized. FP is the number of
+wrongly recognized samples as LOS signals that are actually
+NLOS. FN is the number of wrongly recognized NLOS signals
+that are actually LOS signals. Accuracy is the percentage of
+correctly identified cases. Precision is also known as positive
+predictive value. Recall is known as sensitivity in diagnostic
+binary classification. F1 score is the harmonic mean of the
+precision and recall, which symmetrically represents both
+precision and recall in one metric.
+C. Model Variation
+The shape of networks is an essential factor that determines
+the performance of deep-learning models, namely, the number of layers and the dimension of layers. In addition, the
+dropout rate can prevent neural networks from overfitting [43].
+Therefore, hyperparameter optimization is conducted in terms
+of these three variations. As shown in Table III, nine models
+were developed with different variations. Heads denotes the
+number of heads for the MHA block. We conducted experiments using 1, 2, and 4 heads, respectively. d_ff represents the
+hidden dimension of the Feed Forward block, with values of
+
+Authorized licensed use limited to: Southeast University. Downloaded on March 24,2026 at 08:23:58 UTC from IEEE Xplore. Restrictions apply.
+
+31902
+
+IEEE INTERNET OF THINGS JOURNAL, VOL. 11, NO. 19, 1 OCTOBER 2024
+
+TABLE III
+VARIATIONS ON THE S PATIOTEMPORAL I NFORMATION -D RIVEN M ODEL . U NLISTED VALUES A RE I DENTICAL TO T HOSE OF THE BASE M ODEL
+
+64, 128, and 256 used in our experiments. d_hidden denotes
+the hidden dimension of the corresponding block (MHA and
+LSTM cell). Additionally, we varied the dropout rate and
+the number of MHA layers in our variation experiments. We
+compare their performance based on the out-domain data set.
+First, M1, M2, and M3 are designed with different numbers
+of attention heads for the MHA block. Evaluation metrics
+show M1 gets better results than the other two. Although
+multiple heads in many cases can enable the model to learn
+more information by extending sub-space, it also increases the
+complexity of the model, resulting in a larger generalization
+error. Thus, the increase of heads in the MHA block cannot
+improve the model’s generalization performance on the outdomain data set. Second, from the results of M1, M4, and M5,
+we can see that enlarging the hidden dimension of layers has a
+minor effect on the model’s generalization performance. Third,
+compared to M1 and M7, M8 can obtain a better classification
+result. It notes that dropout improves the model’s generalization performance. Fourth, comparing M1 with M6, stacking
+the MHA blocks decreases model performance. Consequently,
+as the AAM module and the LSTM-TFE module are parallelly
+designed in the model, the small hidden dimension of the
+two modules can result in a reasoned model width. The
+deeper depth of networks decreases the model’s generalization
+performance. And increasing the dropout rate can improve
+model generalization performance. The results show that the
+model M9 offers the best performance.
+
+D. Comparative Experiment
+1) Comparison Models: Four deep-learning-based models
+are used as comparison methods to perform NLOS classification on the two data sets.
+1) A multilayer perceptron (MLP) is a fully connected class
+of feedforward ANNs. MLP consists of the input layer,
+several hidden layers, and the output layer. Rectified
+linear unit (ReLU) is adopted as the activation function
+in this study. It has been widely used for various
+nonlinear fitting tasks. MLP is considered the baseline
+model.
+
+2) The FCNN-LSTM model [24] is presented for satellite
+visibility and pseudorange error predictions. FCNN represents the fully connected network used to learn the
+measurement features of the target satellite. The model
+uses LSTM networks to learn aided information for the
+task from the captured satellite set/sequence in each
+epoch.
+3) The transformer-based model (TBM) [26] is proposed
+to perform NLOS classification using the self-attention
+mechanism to construct the indirect environment
+interaction by computing the relevance between the
+satellites. And it is a previous work of this study.
+4) Our proposed spatiotemporal information-driven crossattention model uses the AAM module to learn the
+spatial environmental features and the LSTM-TFE module to learn the temporal features, respectively. The
+model then fuses the representation vectors of the two
+features with a cross-attention fusion strategy. Moreover,
+we impose a learnable sparse regularizer on the model
+to reduce feature redundancy.
+To give a detailed comparison of these models, Table IV
+demonstrates the capabilities of these models. The instantaneous features mean the learned information from the current
+measurement of the target signal. The temporal features
+denote the historical information of the target signal. The
+spatial environment features mean the representation of environmental characteristics learned from the captured satellite
+sets/sequences in each epoch. The checked symbol denotes
+whether the model is able to learn the features to perform
+NLOS classification.
+2) Model Training: The hyperparameters of models are
+shown in Table V. The hyperparameters of MLP and TBM
+are determined based on model variation studies. The hyperparameters of FCNN-LSTM refer to [24]. The loss and accuracy
+of models in training processing are shown in Fig. 11(a) and
+(b). Some peaks appear on the lines. The reasons can be
+clarified twofold. First, since the experimental devices have
+some unavoidable measurement errors, all labels cannot be
+guaranteed to be absolutely correct. Second, as the satellite
+sets/sequences are constructed as the input, some wrong labels
+are contained in some specific batches. Thus, there are some
+
+Authorized licensed use limited to: Southeast University. Downloaded on March 24,2026 at 08:23:58 UTC from IEEE Xplore. Restrictions apply.
+
+ZENG et al.: SPATIOTEMPORAL INFORMATION-DRIVEN CROSS-ATTENTION MODEL WITH SPARSE REPRESENTATION
+
+31903
+
+TABLE IV
+C OMPARISON OF M ODELS ’ C APABILITIES
+
+TABLE V
+H YPERPARAMETERS OF M ODELS
+
+Fig. 11.
+
+(a) Accuracy and (b) loss of models in training.
+
+peaks in the training processing. However, it has no impact on
+the training result. From the training processing, we can find
+that the models except for MLP can obtain high accuracy in
+the training. The loss can converge after about 20 000 steps.
+It indicates that the capability to learn the spatial environment
+features is a crucial factor for model performance across
+multiple locations.
+3) Comparison Results: We conducted comparison experiments on two established data sets using MLP, FCNN-LSTM,
+TBM, and our proposed model. After training becomes stable,
+we repeat the test at three different epochs and average the
+results as the final result. The models were trained with
+about three epochs in this study. The comparison result for
+the in-domain data set is shown in Fig. 12. First of all,
+our proposed model outperforms other models. Compared to
+the baseline model MLP, our proposed model can improve
+classification accuracy by 16% in the in-domain data set.
+Recall, Precision, and F1-score can be enhanced by 17%.
+Apart from MLP, all other models can obtain more than
+95% classification accuracy. From Table IV, we can find that
+
+MLP cannot extract the spatial environmental features, which
+results in limited performance. It indicates that obtaining
+environmental characteristics is crucial to aid models in NLOS
+classification across multiple locations. FCNN-LSTM utilizes
+LSTM networks to learn aided information from satellite
+sets/sequences. TBM and our proposed model use the selfattention mechanism to obtain environmental characteristics.
+Although FCNN-LSTM shows a better result than TBM, the
+model scale for FCNN-LSTM is much larger, as shown in
+Table V. In light of this, it cannot be proved that the LSTM
+network is more efficient than the self-attention mechanism in
+learning environmental characteristics. Our proposed model,
+fusing the signal temporal feature, appears to generate limited
+promotion compared to FCNN-LSTM and TBM. It can be
+explained twofold. First, the in-domain data set contains 27
+locations, and GNSS signals are recorded for about 18 min at
+each location. As there is a long distance between the satellite
+and the receiver, satellite signals change minorly within
+18 min. Environmental characteristics are a more important
+factor in comparison with signal temporal variation. Due to
+
+Authorized licensed use limited to: Southeast University. Downloaded on March 24,2026 at 08:23:58 UTC from IEEE Xplore. Restrictions apply.
+
+31904
+
+IEEE INTERNET OF THINGS JOURNAL, VOL. 11, NO. 19, 1 OCTOBER 2024
+
+Fig. 12.
+
+Comparison results in the in-domain data set. MLP, FCNN-LSTM, TBM, and our proposed model are used as comparison models.
+
+Fig. 13.
+
+Comparison results in the out-domain data set.
+
+Fig. 14.
+
+Confusion matrix of classification results in the in-domain data set. (a) Concate model. (b) Fusion model. (c) Proposed model.
+
+their ability to extract spatial environmental features, FCNNLSTM, TBM, and our proposed model can achieve good
+performance in the in-domain data set. The comparison result
+for the out-domain data set is shown in Fig. 13. Our proposed
+
+model also obtained superior results than other models in the
+out-domain data set. Compared with MLP, the four evaluation
+metrics can be improved by more than 7%. The recognition
+precision of LOS signals can be 76% in unknown locations.
+
+Authorized licensed use limited to: Southeast University. Downloaded on March 24,2026 at 08:23:58 UTC from IEEE Xplore. Restrictions apply.
+
+ZENG et al.: SPATIOTEMPORAL INFORMATION-DRIVEN CROSS-ATTENTION MODEL WITH SPARSE REPRESENTATION
+
+Fig. 15.
+
+31905
+
+Confusion matrix of classification results in the out-domain data set. (a) Concate model. (b) Fusion model. (c) Proposed model.
+
+Fig. 16. Heatmap of representation vectors. (a) is the heatmap for the Fusion model. (b) is for the proposed model. We used 100 representation vectors to
+plot the heatmap. The hidden dimension of vectors is 64. All arguments for the two color bars are the same, and the shade of the color for the color bar
+represents the numerical value of the element.
+
+We believe that the complex structures of the FCNN-LSTM
+and TBM models enable them to learn the representation
+of environmental features. However, this complexity also
+makes them more prone to overfitting on the in-domain data
+set. Consequently, the MLP model performs better than the
+FCNN-LSTM and TBM models in the out-domain. In other
+words, environmental characteristics can allow the model to
+give a preference for known scenes. Compared to FCNNLSTM, TBM and our proposed model utilize the self-attention
+mechanism to learn environmental characteristics, which not
+only obtains high precision in the in-domain data set but also
+has better generalization performance in the out-domain data
+set. It demonstrates that our proposed AAM module has the
+capability to extract environmental characteristics from GNSS
+measurements effectively.
+Fig. 17. Distribution of the representation vectors generated by the Fusion
+model and the proposed model. (About 10 000 samples are used.)
+
+In combination with the results from the in-domain data set,
+it indicates that our proposed model can be more adaptive in
+dealing with dynamic environments and temporal variation.
+MLP appears to achieve competitive results.
+
+E. Ablation Study by Changing Different Fusion Strategies
+and Moving Out of the Sparse Block
+To investigate the contribution of the fusion strategy and
+the learnable sparse regularizer on the proposed model’s
+performance, we developed three models by changing the
+fusion strategy and moving out of the sparse optimization
+block. The Concat model uses the AAM module to learn the
+spatial environmental features, and the LSTM-TFE module to
+
+Authorized licensed use limited to: Southeast University. Downloaded on March 24,2026 at 08:23:58 UTC from IEEE Xplore. Restrictions apply.
+
+31906
+
+Fig. 18.
+
+IEEE INTERNET OF THINGS JOURNAL, VOL. 11, NO. 19, 1 OCTOBER 2024
+
+Classification results based on different time lengths.
+
+learn the temporal features, respectively. It then concatenates
+the representation vectors directly. The Fusion model adopts
+a cross-attention fusion strategy to integrate both types of
+features. Based on the Fusion model, we additionally introduce
+a learnable sparse regularizer to obtain the final proposed
+model. The experiments are conducted on two data sets.
+We compute the confusion matrix of classification results
+and compare them to understand the influence of corresponding components on model performance. Fig. 14 shows
+the classification result of three models on the in-domain
+data set. First, we can see that the Fusion model performs
+better than the Concate model in NLOS and LOS signal
+recognition. It indicates that the cross-attention fusion strategy
+results in more efficient feature fusion. Second, the proposed
+model shows further advancements than the Fusion model.
+The sparse optimization block improves model performance
+by realizing sparse representations. Finally, three models
+achieved high-precision classification performance. It implies
+that spatiotemporal features can help models perform NLOS
+classification across multiple locations. Fig. 15 demonstrates
+the classification results of the models in the out-domain data
+set. Although the Concate model shows the most impressive
+result in NLOS signal recognition, LOS recognition precision
+is low. Compared to it, the Fusion model shows better overall
+classification performance. Our proposed model, introducing a
+learnable sparse regularizer to address feature redundancy, can
+achieve better generalization performance than both of them.
+Moreover, to understand the role of the sparse representation
+more intuitively, we plotted the heatmaps and distributions for
+the representation vectors. From Fig. 16, we can see that the
+maximum value of vectors generated by the Fusion model
+is larger than the one generated by the proposed model.
+Compared to the Fusion model, light-colored pixel blocks
+appear more frequently in the heatmap for the proposed
+model, which means that most representation vector values
+reach 0. Fig. 17 demonstrates the distribution of representation
+
+vectors for the two models. Most of the representation vectors
+generated by the proposed model focus on around 0. The result
+is consistent with Fig. 16. The proposed method results in a
+sparse representation vector. The learnable sparse regularizer
+can derive a better feature representation to boost NLOS
+classification.
+F. Time Length of Sliding Window
+For the LSTM-TFE module, the input channel is fed with
+signal historical epochs. The time length of the input sequence
+determines how much historical information the model will
+observe. Therefore, we changed the slide window size to
+generate input sequences with different time lengths. Fig. 18
+shows the test results. With the time length increasing from 6
+to 20, the model performance changes. The most impressive
+results appear at 8 or 10. The model obtains 76% precision
+for LOS recognition in the out-domain data set when the time
+length is 10. It indicates that the model cannot extract enough
+valuable information from a short time length. By increasing
+the time length, the model can learn temporal features more
+effectively. However, classification accuracy decreases when
+the time length exceeds a reasoned value. As we know,
+temporal data often exhibits different tendencies across various
+time scales. Thus, a time length exceeding the reasoned value
+introduces unnecessary historical information, which prevents
+the model from learning the correct patterns.
+V. C ONCLUSION
+This study aims to model environmental characteristics and signal temporal information, integrating them to
+enhance GNSS NLOS classification across multiple locations.
+We therefore propose a spatiotemporal information-driven
+cross-attention model with sparse representation to extract
+spatiotemporal information that can generate accurate NLOS
+classification. In particular, the proposed AAM module can
+
+Authorized licensed use limited to: Southeast University. Downloaded on March 24,2026 at 08:23:58 UTC from IEEE Xplore. Restrictions apply.
+
+ZENG et al.: SPATIOTEMPORAL INFORMATION-DRIVEN CROSS-ATTENTION MODEL WITH SPARSE REPRESENTATION
+
+learn the spatial environmental features successfully by using
+the self-attention mechanism to compute relevance among
+satellite signals. In addition, the proposed LSTM-TFE module
+captures the signal temporal features from historical epochs
+effectively. The spatiotemporal information is then obtained
+with a cross-attention fusion strategy. Moreover, the adoption of a learnable sparse regularizer reduces the feature
+redundancy to realize a sparse representation that improves
+the model’s generalization performance. In experiments, we
+use real-world data sets collected across multiple urban
+canyon locations to test our model. The proposed model can
+achieve 98% classification accuracy across multiple locations.
+Generalization performance in unknown environments can be
+improved by over 7% compared to several state-of-the-art
+models. A limitation of our model is that it could not achieve
+as high classification accuracy as the in-domain data set when
+applying it to the out-domain data set. In future work, we aim
+to improve the domain adaptability of the model to overcome
+this limitation.
+R EFERENCES
+[1] T. Janssen, A. Koppert, R. Berkvens, and M. Weyn, “A survey on IoT
+positioning leveraging LPWAN, GNSS, and LEO-PNT,” IEEE Internet
+Things J., vol. 10, no. 13, pp. 11135–11159, Jul. 2023.
+[2] A. Grenier, E. S. Lohan, A. Ometov, and J. Nurmi, “A survey on
+low-power GNSS,” IEEE Commun. Surveys Tuts., vol. 25, no. 3,
+pp. 1482–1509, 3rd Quart., 2023.
+[3] B. Mao, X. Zhou, J. Liu, and N. Kato, “On an intelligent hierarchical
+routing strategy for ultra-dense free space optical low earth orbit satellite
+networks,” IEEE J. Sel. Areas Commun., vol. 42, no. 5, pp. 1219–1230,
+May 2024.
+[4] Y. Zhu, B. Mao, and N. Kato, “IRS-aided high-accuracy positioning for
+autonomous driving toward 6G: A tutorial,” IEEE Veh. Technol. Mag.,
+vol. 19, no. 1, pp. 85–92, Mar. 2024.
+[5] H. Zhao et al., “Improving performances of GNSS positioning correction
+using multiview deep reinforcement learning with sparse representation,” GPS Solut., vol. 28, no. 3, pp. 1–22, 2024.
+[6] H. Zhao, Z. Li, C. Chen, L. Wang, K. Xie, and S. Xie, “Fusing vehicle
+trajectories and GNSS measurements to improve GNSS positioning
+correction based on actor-critic learning,” in Proc. Int. Tech. Meeting
+Inst. Navig. (ITM), 2023, pp. 82–94.
+[7] Y. Zhu, B. Mao, and N. Kato, “On a novel high accuracy positioning with
+intelligent reflecting surface and unscented Kalman filter for intelligent
+transportation systems in B5G,” IEEE J. Sel. Areas Commun., vol. 42,
+no. 1, pp. 68–77, Jan. 2024.
+[8] L. Wang, P. D. Groves, and M. K. Ziebart, “Smartphone shadow matching for better cross-street GNSS positioning in urban environments,” J.
+Navig., vol. 68, no. 3, pp. 411–433, 2015.
+[9] S. Bauer, M. Obst, and G. Wanielik, “3D environment modeling for
+GPS multipath detection in urban areas,” in Proc. IEEE Int. Multi-Conf.
+Syst., Signals Devices. (SSD), 2012, pp. 1–5.
+[10] L.-T. Hsu, Y. Gu, and S. Kamijo, “3D building model-based pedestrian
+positioning method using gps/glonass/qzss and its reliability calculation,” GPS Solut., vol. 20, no. 3, pp. 413–428, 2016.
+[11] F. van Diggelen, “End game for urban GNSS: Google’s use of 3D
+building models,” Inside GNSS, vol. 16, no. 2, pp. 42–49, 2021.
+[12] L.-T. Hsu, “GNSS multipath detection using a machine learning
+approach,” in Proc. IEEE 20th Int. Conf. Intell. Transp. Syst. (ITSC),
+2017, pp. 1–6.
+[13] B. Xu, Q. Jia, Y. Luo, and L.-T. Hsu, “Intelligent GPS L1
+LOS/multipath/NLOS classifiers based on correlator-, RINEX-and
+NMEA-level measurements,” Remote Sens., vol. 11, no. 16, p. 1851,
+2019.
+[14] E. Munin, A. Blais, and N. Couellan, “Convolutional neural network for
+multipath detection in GNSS receivers,” in Proc. Int. Conf. Artif. Intell.
+Data Anal. Air Transp., 2020, pp. 1–10.
+[15] T. Suzuki and Y. Amano, “NLOS multipath classification of GNSS
+signal correlation output using machine learning,” Sensors, vol. 21, no. 7,
+p. 2503, 2021.
+
+31907
+
+[16] Y. Quan, L. Lau, G. W. Roberts, X. Meng, and C. Zhang, “Convolutional
+neural network based multipath detection method for static and kinematic GPS high precision positioning,” Remote Sens., vol. 10, no. 12,
+p. 2052, 2018.
+[17] J. Yue, B. Xu, and L.-T. Hsu, “Data denoising based on Hadamard
+matrix transformation and rayleigh quotient maximization: Application
+to GNSS signal classification,” IEEE Trans. Instrum. Meas., vol. 71,
+pp. 1–11, Jun. 2022.
+[18] Y. Sun and L. Fu, “Stacking ensemble learning for non-line-of-sight
+detection of global navigation satellite system,” IEEE Trans. Instrum.
+Meas., vol. 71, pp. 1–10, Apr. 2022.
+[19] H. Gao and P. D. Groves, “Environmental context detection for adaptive
+navigation using GNSS measurements from a smartphone,” Navig., J.
+Inst. Navig., vol. 65, no. 1, pp. 99–116, 2018.
+[20] H. Xu, L.-T. Hsu, D. Lu, and B. Cai, “Sky visibility estimation
+based on GNSS satellite visibility: an approach of GNSS-based context
+awareness,” GPS Solut., vol. 24, no. 2, pp. 1–15, 2020.
+[21] Y. Wang, J. Xu, R. Yang, and X. Zhan, “GNSS multipath detection based
+on decision tree algorithm in urban canyons,” in Proc. China Satell.
+Navig. Conf. (CSNC), 2021, pp. 375–383.
+[22] Y. Tao et al., “Real-time multipath mitigation in multi-GNSS short
+baseline positioning via CNN-LSTM method,” Math. Probl. Eng.,
+vol. 2021, no. 1, pp. 1–12, 2021.
+[23] H. Su, B. Wu, and X. Mao, “Non-line-of-sight multipath detection
+method for bds/gps fusion system based on deep learning,” J. Shanghai
+Jiaotong Univ. Sci., vol. 27, no. 6, pp. 844–854, 2022.
+[24] G. Zhang, P. Xu, H. Xu, and L.-T. Hsu, “Prediction on the urban gnss
+measurement uncertainty based on deep learning networks with long
+short-term memory,” IEEE Sensors J., vol. 21, no. 18, pp. 20563–20577,
+Sep. 2021.
+[25] A. Blais, N. Couellan, and E. Munin, “A novel image representation of
+GNSS correlation for deep learning multipath detection,” Array, vol. 14,
+Jul. 2022, Art. no. 100167.
+[26] Z. Li, K. Zeng, L. Wang, X. Kan, R. Yuan, and S. Xie, “NLOS/LOS
+classification by constructing indirect environment interaction from
+GNSS receiver measurements using a transformer-based deep learning model,” in Proc. Int. Tech. Meeting Inst. Navig. (ITM), 2023,
+pp. 859–870.
+[27] I. Sutskever, O. Vinyals, and Q. V. Le, “Sequence to sequence learning
+with neural networks,” in Proc. Adv. Neural Inf. Process. Syst., vol. 27,
+2014, pp. 1–9.
+[28] A. Vaswani et al., “Attention is all you need,” in Proc. Adv. Neural Inf.
+Process. Syst., vol. 30, 2017, pp. 1–11.
+[29] S. Ahmad and L. Scheinkman, “How can we be so dense? The benefits
+of using highly sparse representations,” 2019, arXiv:1903.11257.
+[30] Z. Li, J. Tang, H. Zhao, C. Chen, and S. Xie, “Dictionary
+learning-structured reinforcement learning with adaptive-sparsity regularizer,” IEEE Trans. Aerosp. Electron. Syst., vol. 60, no. 2,
+pp. 1753–1769, Apr. 2024.
+[31] J. Wright, A. Y. Yang, A. Ganesh, S. S. Sastry, and Y. Ma, “Robust face
+recognition via sparse representation,” IEEE Trans. Pattern Anal. Mach.
+Intell., vol. 31, no. 2, pp. 210–227, Feb. 2009.
+[32] K. Huang and S. Aviyente, “Sparse representation for signal classification,” in Proc. Adv Neural Inf Process Syst., vol. 19, 2006, pp. 1–8.
+[33] Z. Li, Y. Xie, K. Zeng, S. Xie, and B. T. Kumara, “Adaptive sparsityregularized deep dictionary learning based on lifted proximal operator
+machine,” Knowl. Based Syst., vol. 260, Jan. 2023, Art. no. 110123.
+[34] D. Hazarika, S. Gorantla, S. Poria, and R. Zimmermann, “Self-attentive
+feature-level fusion for multimodal emotion detection,” in Proc. IEEE
+Conf. Multimedia Inf. Process. Retr. (MIPR), 2018, pp. 196–201.
+[35] Z. Li et al., “BEVFormer: Learning bird’s-eye-view representation from
+multi-camera images via spatiotemporal transformers,” in Proc. Eur.
+Conf. Comput. Vis., 2022, pp. 1–18.
+[36] C.-F. R. Chen, Q. Fan, and R. Panda, “CrossViT: Cross-attention multiscale vision transformer for image classification,” in Proc. Int. Conf.
+Comput. Vis., 2021, pp. 357–366.
+[37] T. Xu, W. Chen, P. Wang, F. Wang, H. Li, and R. Jin, “CDTrans:
+Cross-domain transformer for unsupervised domain adaptation,” 2021,
+arXiv:2109.06165.
+[38] R. C. Staudemeyer and E. R. Morris, “Understanding LSTM—A
+tutorial into long short-term memory recurrent neural networks,” 2019,
+arXiv:1909.09586.
+[39] S. Ruder, “An overview of gradient descent optimization algorithms,”
+2016, arXiv:1609.04747.
+[40] D.-J. Jwo, M. Hsieh, and Y. Lee, “GPS navigation solution using the
+iterative least absolute deviation approach,” Sci. Iran. B, vol. 22, no. 6,
+pp. 2103–2111, 2015.
+
+Authorized licensed use limited to: Southeast University. Downloaded on March 24,2026 at 08:23:58 UTC from IEEE Xplore. Restrictions apply.
+
+31908
+
+IEEE INTERNET OF THINGS JOURNAL, VOL. 11, NO. 19, 1 OCTOBER 2024
+
+[41] I. K. M. Jais, A. R. Ismail, and S. Q. Nisa, “Adam optimization algorithm
+for wide and deep neural network,” Knowl. Eng. Data Sci., vol. 2, no. 1,
+pp. 41–46, 2019.
+[42] J. Lever, “Classification evaluation: It is important to understand both
+what a classification metric expresses and what it hides,” Nat Methods.,
+vol. 13, no. 8, pp. 603–605, 2016.
+[43] N. Srivastava, G. Hinton, A. Krizhevsky, I. Sutskever, and
+R. Salakhutdinov, “Dropout: A simple way to prevent neural networks
+from overfitting,” J. Mach. Learn. Res., vol. 15, no. 1, pp. 1929–1958,
+2014.
+
+Kungan Zeng received the bachelor’s degree
+from the Department of Civil Engineering, Hunan
+University of Technology, Zhuzhou, China, in 2014,
+the master’s degree from the School of Civil
+Engineering, Guangzhou University, Guangzhou,
+China, in 2014, and the Ph.D. degree from the
+School of Computer Science and Engineering,
+University of Aizu, Aizuwakamatsu, Japan, in 2018.
+He is currently a Postdoctoral Fellow with
+the School of Software Engineering, Sun Yat-sen
+University, Zhuhai, China. His current research
+interests include deep learning, GNSS positioning, and natural language
+processing.
+
+Zhenni Li received the B.Sc. degree from the School
+of Physical Science and Electronics, Shanxi Datong
+University, Datong, China, in 2009, the M.Sc. degree
+from the School of Physics and Optoelectronic,
+Dalian University of Technology, Dalian, China, in
+2012, and the Ph.D. degree from the School of
+Computer Science and Engineering, University of
+Aizu, Aizuwakamatsu, Japan, in 2015.
+She is currently an Associate Professor with the
+School of Automation, Guangdong University of
+Technology, Guangzhou, China, where she is also
+with Guangdong–Hong Kong–Macao Joint Laboratory for Smart Discrete
+Manufacturing. Her research interests include deep learning, reinforcement
+learning, and high-precious positioning.
+
+Haoli Zhao received the B.Sc. degree in nuclear
+physics from the College of Physical Science and
+Technology, Sichuan University, Chengdu, China, in
+2012, the M.Sc. degree in nuclear environmental
+science and technology from the Department of
+Material, Sheffield University, Sheffield, U.K., in
+2014, and the Ph.D. degree in computer science
+and engineering from the Graduate Department of
+Computer and Information System, University of
+Aizu, Aizuwakamatsu, Japan, in 2019.
+He is currently an Associate Professor with the
+School of Artificial Intelligence, Hebei University of Technology, Tianjin,
+China. His current research interests focus on sparse representation, deep
+learning, reinforcement learning, and GNSS positioning in detail.
+
+Kan Xie (Member, IEEE) received the Ph.D. degree
+in control science and engineering from Guangdong
+University of Technology, Guangzhou, China, in
+2017.
+After that, he joined the Institute of Intelligent
+Information Processing, Guangdong University of
+Technology, where he is currently an Associate
+Professor. His research interests include machine
+learning, nonnegative signal processing, blind signal
+processing, smart grid, and Internet of Things.
+
+Shengli Xie (Fellow, IEEE) received the B.S. degree
+in mathematics from Jilin University, Changchun,
+China, in 1983, the M.S. degree in mathematics from
+Central China Normal University, Wuhan, China,
+in 1995, and the Ph.D. degree in control theory
+and applications from the South China University of
+Technology, Guangzhou, China, in 1997.
+He is currently a Full Professor and the Head of
+the Institute of Intelligent Information Processing,
+Guangdong University of Technology, Guangzhou.
+He has co-authored two books and over 150 research
+papers in refereed journals and conference proceedings. His research interests
+include blind signal processing, machine learning, and Internet of Things.
+Prof. Xie was awarded the Second Prize of National Natural Science Award
+of China in 2009. He was awarded the Highly Cited Researcher in 2020. He
+is an Associate Editor of IEEE T RANSACTIONS ON S YSTEMS , M AN , AND
+C YBERNETICS : S YSTEMS. He is a Foreign Full Member (Academician) of
+the Russian Academy of Engineering.
+Dusit Niyato (Fellow, IEEE) received the B.Eng.
+degree from King Mongkut’s Institute of Technology
+Ladkrabang, Bangkok, Thailand, in 1999, and the
+Ph.D. degree in electrical and computer engineering
+from the University of Manitoba, Winnipeg, MB,
+Canada, in 2008.
+He is a Professor with the School of Computer
+Science and Engineering, Nanyang Technological
+University, Singapore. His research interests are in
+the areas of sustainability, edge intelligence, decentralized machine learning, and incentive mechanism
+design.
+Wuhui Chen (Member, IEEE) received the bachelor’s degree from Northeast University, Shenyang,
+China, in 2008, and the master’s and Ph.D. degrees
+from the University of Aizu, Aizuwakamatsu, Japan,
+in 2011 and 2014, respectively.
+From 2014 to 2016, he was a Research Fellow
+with Japan Society for the Promotion of Science,
+Tokyo, Japan. From 2016 to 2017, he was a
+Researcher with the University of Aizu. He is
+currently an Associate Professor with Sun Yat-sen
+University, Guangzhou, China. His current research
+interests include edge/cloud computing, cloud robotics, and blockchain.
+Zibin Zheng (Fellow, IEEE) received the B.Eng.
+and M.Phil. degrees in computer science from Sun
+Yat-sen University, Guangzhou, China, in 2005 and
+2007, respectively, and the Ph.D. degree from The
+Chinese University of Hong Kong (CUHK), Hong
+Kong, China, in 2010.
+He is currently a Professor and the Deputy Dean
+of the School of Software Engineering, Sun Yatsen University, Guangzhou, China. He authored or
+co-authored more than 200 international journal and
+conference papers, including one ESI hot paper and
+ten ESI highly cited papers. According to Google Scholar, his papers have
+more than 28 000 citations. His research interests include blockchain, software
+engineering, and services computing.
+Dr. Zheng was the recipient of several awards, including the Top 50
+Influential Papers in Blockchain of 2018, the ACM SIGSOFT Distinguished
+Paper Award at ICSE2010, and the Best Student Paper Award at ICWS2010.
+He was the BlockSys’19 and CollaborateCom16 General Co-Chair of SC2’19
+and ICIOT18 and the IoV14 PC Co-Chair. He is a Fellow of IET.
+
+Authorized licensed use limited to: Southeast University. Downloaded on March 24,2026 at 08:23:58 UTC from IEEE Xplore. Restrictions apply.
+
+
