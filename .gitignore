@@ -1,0 +1,5 @@
+__pycache__/
+*.py[cod]
+
+# Raw UrbanNav source data is too large for regular GitHub pushes.
+data/urbannav-medium/

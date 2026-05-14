@@ -41,6 +41,33 @@ L01,0,G02,0,30.4,18.1,201.5,6.8
 
 `label=1` 表示 LOS，`label=0` 表示 NLOS；这与论文指标定义中 TP 为 LOS 一致。代码也兼容一些常见别名，如 `C/N0`、`EL`、`Az`、`PRE`、`SVID` 等。
 
+## UrbanNav-Medium 数据集转换
+
+如果已按当前目录结构下载 UrbanNav 官方仓库说明文件和 Medium Urban 数据：
+
+- `data/UrbanNavDataset-master/`: UrbanNav 官方 GitHub main 分支说明、标定文件和工具。
+- `data/urbannav-medium/`: `UrbanNav-HK-Medium-Urban-1` 的 GNSS、groundtruth、skymask 和 virtual sky-pointing camera video。
+
+可直接生成本项目训练所需 CSV：
+
+```bash
+conda run -n deep_learning python scripts/make_urbannav_dataset.py \
+  --root data/urbannav-medium \
+  --receiver google.pixel4 \
+  --out data/urbannav_medium_google_pixel4.csv
+```
+
+转换脚本会从 `.nmea` 的 GSV 语句提取 `cn0/elevation/azimuth`，从 `.obs` 的 RINEX `C1C` 伪距生成可复现的局部伪距残差特征，并用 groundtruth 最近位置匹配 skymask：卫星仰角高于对应方位角遮挡角时标为 LOS，否则标为 NLOS。
+
+生成后即可训练主模型：
+
+```bash
+conda run -n deep_learning python src/train.py \
+  --data data/urbannav_medium_google_pixel4.csv \
+  --model proposed \
+  --split in_domain
+```
+
 ## 快速运行
 
 安装依赖：

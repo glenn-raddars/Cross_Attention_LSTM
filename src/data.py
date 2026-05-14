@@ -155,14 +155,16 @@ def _group(records: list[Record], keys: tuple[str, ...]) -> dict[tuple[object, .
 def split_in_domain(records: list[Record], train_ratio: float = 0.7, seed: int = 42) -> SplitRecords:
     """同域划分：每个 location 内按 epoch 随机拆分训练集和测试集。"""
 
-    rng = np.random.default_rng(seed)
+    rng = np.random.default_rng(seed) # 固定随机数种子，保证每次运行划分结果一致，便于复现实验结果。我们使用 NumPy 的随机数生成器来打乱 epoch 的顺序，从而实现随机划分。train_ratio 参数控制训练集占整个数据集的比例，默认为 0.7，也就是 70% 的数据用于训练，30% 的数据用于测试。
     train: list[Record] = []
     test: list[Record] = []
-    for group in _group(records, ("location_id",)).values():
+    for group in _group(records, ("location_id",)).values(): # 相同地点下的所有特征值
         # 以 epoch 为单位划分，而不是逐行随机划分，避免同一历元的卫星集合被拆散后泄漏。
-        epochs = np.array(sorted({float(row["epoch"]) for row in group}))
+        epochs = np.array(sorted({float(row["epoch"]) for row in group})) # epochs 是这个 location_id 下所有独特的 epoch 值的数组，先用 set 去重，再排序成升序。我们以 epoch 为单位进行划分，确保同一历元的卫星集合不会被拆散，从而避免数据泄漏。
+        # epochs 的样例格式如下：
+        # array([123456.0, 123457.0, 123458.0, ...])
         rng.shuffle(epochs)
-        train_epochs = set(epochs[: max(1, int(len(epochs) * train_ratio))])
+        train_epochs = set(epochs[: max(1, int(len(epochs) * train_ratio))]) # 训练集的 epoch 集合，按 train_ratio 的比例从打乱后的 epochs 中选取前面的一部分。我们用 set 存储 train_epochs，方便后续判断一个 epoch 是否属于训练集。
         train.extend(row for row in group if float(row["epoch"]) in train_epochs)
         test.extend(row for row in group if float(row["epoch"]) not in train_epochs)
     return SplitRecords(train, test)
@@ -214,7 +216,7 @@ class GNSSNLOSDataset(Dataset):
         min_history: int = 1,
     ) -> None:
         self.window_size = window_size
-        self.max_sats = max_sats or max_satellites(records) # 最大卫星数如果不指定就自动计算，保证空间输入能容纳每个历元的所有卫星。这个值会用来确定 spatial 输入的第二维长度，以及 spatial_mask 的长度。
+        self.max_sats = max_sats or max_satellites(records)
         self.normalizer = normalizer
         # by_epoch 用于构造同一历元的空间卫星集合；by_track 用于构造同一卫星的时间历史。
         by_epoch = _group(records, ("location_id", "epoch"))
@@ -236,42 +238,18 @@ class GNSSNLOSDataset(Dataset):
                 # temporal 固定为 [window_size, feature_dim]。历史不足 window_size 时，
                 # 前面保持 0 padding，真实历史右对齐放在末尾，最近时刻始终在最后一行。
                 temporal = np.zeros((window_size, len(FEATURE_COLUMNS)), dtype=np.float32)
-                hist_values = self._features(history) 
-                temporal[-len(history) :] = hist_values # temporal 的形状是 [window_size, feature_dim]，其中 feature_dim 是 FEATURE_COLUMNS 的长度，也就是 4。对于每个样本，我们取当前行所在卫星轨迹的历史窗口，如果历史长度不足 window_size，就在前面用零填充，保证 temporal 的形状固定。最近的历史时刻始终放在 temporal 的最后一行，这样模型就能学会关注最近的历史信息。
+                hist_values = self._features(history)
+                temporal[-len(history) :] = hist_values
 
                 # 当前历元下所有卫星共同构成空间输入，供 AAM/Transformer 建模卫星间关系。
                 epoch_group = by_epoch[(row["location_id"], row["epoch"])]
-                # epoch_group的样例格式如下：
-                # [
-                #     {
-                #         "location_id": "loc1",
-                #         "epoch": 123456.0,
-                #         "satellite_id": "sat1",
-                #         "label": 1.0,
-                #         "cn0": 45.0,
-                #         "elevation": 30.0,
-                #         "azimuth": 180.0,
-                #         "pseudorange_residual": 0.5,
-                #     },
-                #     {
-                #         "location_id": "loc1",
-                #         "epoch": 123456.0,
-                #         "satellite_id": "sat2",
-                #         "label": 0.0,
-                #         "cn0": 30.0,
-                #         "elevation": 20.0,
-                #         "azimuth": 190.0,
-                #         "pseudorange_residual": 1.0,
-                #     },
-                #     ...
-                # ]
                 spatial_values = self._features(epoch_group)
                 spatial = np.zeros((self.max_sats, len(FEATURE_COLUMNS)), dtype=np.float32)
                 # PyTorch MultiheadAttention 的 key_padding_mask 中 True 表示“需要忽略”。
                 # 因此先全部置 True，再把真实卫星位置改成 False。
                 spatial_mask = np.ones((self.max_sats,), dtype=bool)
                 keep = min(len(spatial_values), self.max_sats)
-                spatial[:keep] = spatial_values[:keep] # 把有用的卫星特征填充到spatial的前 keep 行，剩余行保持全零。spatial 的形状是 [max_sats, feature_dim]，其中 max_sats 是我们之前确定的最大卫星数，feature_dim 是 FEATURE_COLUMNS 的长度。对于每个样本，我们取当前历元下所有卫星的特征，如果卫星数量超过 max_sats，就只保留前 max_sats 个；如果不足，就在后面用零填充。
+                spatial[:keep] = spatial_values[:keep]
                 spatial_mask[:keep] = False
 
                 # 记录目标卫星在 spatial 序列中的位置。TransformerBasedModel 会用这个
@@ -298,7 +276,7 @@ class GNSSNLOSDataset(Dataset):
     def _features(self, rows: list[Record]) -> np.ndarray:
         # 按 FEATURE_COLUMNS 固定顺序抽取特征，保证训练和推理时特征维度含义一致。
         values = np.array([[float(row[column]) for column in FEATURE_COLUMNS] for row in rows], dtype=np.float32)
-        return self.normalizer.transform(values) # 这里调用的是类方法 Normalizer.transform，对输入特征进行标准化处理，保证每个特征大致处在相近尺度，便于神经网络训练。
+        return self.normalizer.transform(values)
 
     def __len__(self) -> int:
         return len(self.samples)
