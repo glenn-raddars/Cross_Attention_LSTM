@@ -70,7 +70,7 @@ OUTPUT_COLUMNS = [
 ]
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True) # 类的初始化常用方法，frozen=True 让实例不可变，hashable，可以作为 dict 的 key。
 class GroundTruth:
     """某一秒车辆的真实位置。
 
@@ -104,9 +104,9 @@ class NMEAMeasurement:
 
     utc_time: int
     satellite_id: str
-    elevation: float
-    azimuth: float
-    cn0: float
+    elevation: float # 仰角
+    azimuth: float # 方位角
+    cn0: float # 载噪比
 
 
 def dms_to_degrees(degrees: str, minutes: str, seconds: str) -> float:
@@ -117,10 +117,10 @@ def dms_to_degrees(degrees: str, minutes: str, seconds: str) -> float:
         22 18 04.31949
         114 10 44.60559
 
-    十进制度计算公式为 D + M / 60 + S / 3600。
+    十进制度计算公式为 D + M / 60 + S / 3600。 度分秒中的度数部分可能带有负号，表示南纬或西经。转换时保留这个符号即可。
     """
 
-    sign = -1.0 if degrees.startswith("-") else 1.0
+    sign = -1.0 if degrees.startswith("-") else 1.0 # 负号只看度数部分，分钟和秒数不带符号。
     return sign * (abs(float(degrees)) + float(minutes) / 60.0 + float(seconds) / 3600.0)
 
 
@@ -141,13 +141,13 @@ def read_groundtruth(path: Path) -> dict[int, GroundTruth]:
     with path.open("r", encoding="utf-8") as handle:
         for line in handle:
             parts = line.split()
-            if len(parts) < 9:
+            if len(parts) < 9: # 每行至少要有 9 列才能包含上述字段，否则跳过。
                 continue
             try:
-                utc_time = int(round(float(parts[0])))
+                utc_time = int(round(float(parts[0]))) # 四舍五入到秒，保持和 NMEA/RINEX 对齐。
                 latitude = dms_to_degrees(parts[3], parts[4], parts[5])
                 longitude = dms_to_degrees(parts[6], parts[7], parts[8])
-            except ValueError:
+            except ValueError: # 跳过第一行表头和第二行单位说明，以及任何格式不正确的行。
                 continue
             groundtruth[utc_time] = GroundTruth(utc_time, latitude, longitude)
     if not groundtruth:
@@ -197,8 +197,8 @@ def nearest_skymask(point: GroundTruth, skymasks: list[SkyMask]) -> SkyMask:
     """
 
     return min(
-        skymasks,
-        key=lambda mask: (mask.latitude - point.latitude) ** 2 + (mask.longitude - point.longitude) ** 2,
+        skymasks, # 在所有的 skymask 行中，找到距离 GT 点最近的那个。
+        key=lambda mask: (mask.latitude - point.latitude) ** 2 + (mask.longitude - point.longitude) ** 2, # lambda函数计算 GT 点和每个 skymask 行之间的经纬度平方距离，min 函数返回距离最近的那个 skymask 行。
     )
 
 
@@ -255,7 +255,7 @@ def parse_gsv_line(line: str) -> list[NMEAMeasurement]:
 
     # rpartition(",") 从最后一个逗号切开，避免 NMEA 主体内部的逗号干扰。
     # body 是标准 NMEA 语句，timestamp_text 是 UrbanNav 额外附加的毫秒时间戳。
-    body, _, timestamp_text = line.strip().rpartition(",")
+    body, _, timestamp_text = line.strip().rpartition(",") # line.strip().rpartition(",")返回一个三元组 (body, sep, timestamp_text)，其中 body 是 line 去掉末尾时间戳后的部分，sep 是逗号，timestamp_text 是逗号后面的时间戳文本。
     if not body.startswith("$") or "GSV" not in body[:6]:
         return []
     try:
@@ -266,15 +266,15 @@ def parse_gsv_line(line: str) -> list[NMEAMeasurement]:
 
     fields = body.split(",")
     # "$GPGSV" -> "GP"，"$GAGSV" -> "GA"。
-    talker = fields[0][1:3]
+    talker = fields[0][1:3] # fields[0] 是 "$GPGSV"，fields[0][1:3] 就是 "GP"，表示卫星系统。
     measurements: list[NMEAMeasurement] = []
-    for start in range(4, len(fields) - 3, 4):
+    for start in range(4, len(fields) - 3, 4): # 从第 4 个字段开始，每 4 个字段是一颗卫星的观测，直到倒数第 3 个字段为止（因为每颗卫星需要 4 个字段）。合法条件是start + 3 <= len(fields) - 1，即 start <= len(fields) - 4。
         raw_svid, elevation, azimuth, cn0_and_checksum = fields[start : start + 4]
         # C/N0 字段可能带有校验和，例如 "24*68"，这里只取星号前面的数值。
-        cn0 = cn0_and_checksum.split("*", 1)[0]
+        cn0 = cn0_and_checksum.split("*", 1)[0] # 1 表示只分割一次，得到 C/N0 和校验和两部分，取前面 C/N0 的数值。
         if not raw_svid or not elevation or not azimuth or not cn0:
             continue
-        satellite_id = nmea_satellite_id(talker, raw_svid)
+        satellite_id = nmea_satellite_id(talker, raw_svid) # 把 talker 和 raw_svid 转成 RINEX 风格的卫星编号，例如 "GP" + "01" -> "G01"。如果无法解析，返回 None。
         if satellite_id is None:
             continue
         try:
@@ -315,7 +315,7 @@ def normalize_rinex_satellite_id(text: str) -> str:
 
     system = text[0]
     prn = int(text[1:].strip())
-    return f"{system}{prn:02d}"
+    return f"{system}{prn:02d}" # 例如 "G1" -> "G01"，"E26" -> "E26"，"R64" -> "R64"，"R65" -> "R01"（GLONASS 卫星编号从 1 开始，但 RINEX 可能写成 65 表示 GLONASS-1 号卫星，减去 64 恢复到 R01）。如果文本格式不合法，可能会抛出 ValueError，这里不捕获，让调用者处理。
 
 
 def rinex_epoch_to_utc(parts: list[str]) -> int:
@@ -334,71 +334,107 @@ def rinex_epoch_to_utc(parts: list[str]) -> int:
     # 当前训练表按整秒对齐，忽略小数秒。UrbanNav 手机 RINEX 和 NMEA 都约为 1Hz。
     whole_seconds = int(seconds)
     dt = datetime(year, month, day, hour, minute, whole_seconds, tzinfo=timezone.utc)
-    return int(dt.timestamp()) - GPS_UTC_LEAP_SECONDS
+    return int(dt.timestamp()) - GPS_UTC_LEAP_SECONDS # 减去18秒，使 GPS 时间转换为 UTC 时间
 
 
 def read_rinex_pseudorange(path: Path) -> dict[tuple[int, str], float]:
-    """从 RINEX observation 文件读取 C1C 伪距。
+    """从 RINEX observation 文件读取 C1C 伪距（GPS L1 C/A 码伪距，单位米）。
 
-    RINEX 3.x 的一个关键点是：每个卫星系统的观测字段顺序可能不同，需要先读头部的
-    `SYS / # / OBS TYPES`。例如 Google Pixel 4 文件里 GPS 有：
+    作用
+    ----
+    扫描一个 RINEX 3.x observation 文件，提取每个时刻、每颗卫星的 C1C 伪距，
+    返回一个以 ``(utc_time, satellite_id)`` 为 key 的字典，供后续与 NMEA、
+    groundtruth 数据按"每秒每星"合并成训练表。
+
+    为什么需要先解析头部
+    --------------------
+    RINEX 3.x 不像旧版那样固定字段顺序：每个卫星系统（G=GPS、E=Galileo、
+    R=GLONASS……）各自声明自己有哪些观测类型、以及它们的排列顺序，写在头部的
+    ``SYS / # / OBS TYPES`` 段里。例如 Google Pixel 4 文件中 GPS 这一行是：
 
         G    8 C1C L1C D1C S1C C5Q L5Q D5Q S5Q
 
-    这说明 GPS 每颗卫星一行中，第 0 个 16 字符字段是 C1C。
-    解析体数据时就按这个字段顺序和固定宽度去切片。
+    含义是：GPS 每颗卫星的观测行里依次排着 8 个观测值，第 0 个是 C1C、第 1 个是
+    L1C……所以必须先读头部，才能知道 C1C 在每行的第几个字段，进而算出它在固定宽度
+    布局中的字符偏移。不同系统（如 Galileo）的字段顺序可能完全不同，因此 obs_types
+    要按系统分别保存。
 
-    返回值仍然用 (utc_time, satellite_id) 做 key，方便和 NMEA 数据合并。
+    RINEX observation 体数据的列布局
+    --------------------------------
+    每条卫星观测行是定宽格式：开头 3 个字符是卫星编号（如 "G01"），其后每个观测值
+    占 16 个字符（14 位数值 + 2 位 LLI/信号强度标志）。因此第 index 个观测值的数值
+    部分从字符位置 ``3 + index * 16`` 开始，取 14 个字符即可。
+
+    返回
+    ----
+    ``dict[(utc_time, satellite_id) -> pseudorange_in_meters]``。
+    若整份文件一个 C1C 都没解析到，抛 ValueError（多半意味着文件格式不符合预期）。
     """
 
+    # obs_types: 每个卫星系统 -> 其观测类型按文件中声明的顺序排成的列表。
+    #   例如 {"G": ["C1C", "L1C", ...], "E": [...]}，用于后面定位 C1C 的列下标。
     obs_types: dict[str, list[str]] = {}
+    # pseudoranges: 最终结果，(时间, 卫星) -> C1C 伪距（米）。
     pseudoranges: dict[tuple[int, str], float] = {}
+    # current_time: 当前正在处理的 epoch（时刻）。epoch 行只出现一次，
+    #   其后连续若干卫星行都共享这个时间，直到遇到下一个 epoch 行。
     current_time: int | None = None
 
+    # errors="ignore"：RINEX 文件偶有非 ASCII/损坏字节，跳过而不让整个解析崩溃。
     with path.open("r", encoding="utf-8", errors="ignore") as handle:
-        # 第一段：读取 RINEX 头部，建立每个卫星系统的观测类型列表。
+        # === 第一段：解析头部，建立每个卫星系统的观测类型顺序表 ===
         for line in handle:
             if "SYS / # / OBS TYPES" in line:
-                system = line[0]
-                count = int(line[3:6])
+                system = line[0]            # 第 0 列是系统标识字符，如 'G' / 'E' / 'R'
+                count = int(line[3:6])      # 第 3~5 列是该系统的观测类型总个数
                 obs_types.setdefault(system, [])
+                # 观测类型名从第 7 列开始、第 60 列结束（再往后是 "SYS / # / OBS TYPES"
+                # 这个标签本身），用 split() 按空白切成 ["C1C", "L1C", ...]。
                 obs_types[system].extend(line[7:60].split())
-                # RINEX 头部一行最多只能放有限个观测类型，类型很多时会续行。
-                # 所以这里持续读取，直到收齐 count 个观测类型。
+                # RINEX 头部一行最多只能放有限个观测类型（约 13 个），类型很多时会续行，
+                # 续行的标签列为空、数据列同样从第 7 列起。这里持续读取下一行补齐，
+                # 直到收集满 count 个为止。
                 while len(obs_types[system]) < count:
                     continuation = next(handle)
                     obs_types[system].extend(continuation[7:60].split())
+                # 截断到正好 count 个，防止续行多 split 出多余 token。
                 obs_types[system] = obs_types[system][:count]
                 continue
             if "END OF HEADER" in line:
-                break
+                break  # 头部结束，剩下的 handle 内容都是观测体数据
 
-        # 第二段：读取每个 epoch 下的卫星观测。
+        # === 第二段：逐行读取观测体数据，提取每个 epoch 下各卫星的 C1C ===
         for line in handle:
             if line.startswith(">"):
-                # epoch 行只更新时间；后续卫星行都属于这个 current_time。
+                # 以 '>' 开头的是 epoch（时刻）行，本身不含观测值，只用于切换时间。
+                # 去掉开头的 '>' 再 split，交给 rinex_epoch_to_utc 转成 Unix UTC 秒。
                 parts = line[1:].split()
                 current_time = rinex_epoch_to_utc(parts)
                 continue
+            # 还没遇到任何 epoch（current_time 为空），或行太短不可能含卫星编号，跳过。
             if current_time is None or len(line) < 4:
                 continue
+            # 前 3 个字符是卫星编号，规范化成 "G01"/"E26" 这种统一两位格式。
             satellite_id = normalize_rinex_satellite_id(line[:3])
-            system = satellite_id[0]
+            system = satellite_id[0]                 # 取系统字符以查对应的观测顺序
             types = obs_types.get(system, [])
+            # 该系统若根本没声明 C1C（或头部里没有这个系统），这颗卫星无伪距可取，跳过。
             if "C1C" not in types:
                 continue
-            index = types.index("C1C")
-            # RINEX observation value 是固定宽度 16 字符字段。
-            # 卫星编号占前 3 字符，所以第 index 个观测值从 3 + index * 16 开始。
+            index = types.index("C1C")               # C1C 在该系统观测序列中的列下标
+            # 按定宽布局定位：卫星编号占前 3 字符，每个观测值占 16 字符，
+            # 因此第 index 个观测值的数值部分从 3 + index * 16 开始，取 14 个字符。
             start = 3 + index * 16
             value_text = line[start : start + 14].strip()
             if not value_text:
-                continue
+                continue  # 该历元这颗星缺测（字段为空），跳过
             try:
                 pseudoranges[(current_time, satellite_id)] = float(value_text)
             except ValueError:
+                # 数值字段含意外字符无法转 float，丢弃这一条而不中断整体解析。
                 continue
     if not pseudoranges:
+        # 一条都没解析到通常说明文件不是预期的 RINEX 3.x observation 格式。
         raise ValueError(f"No C1C pseudoranges were parsed from {path}")
     return pseudoranges
 
@@ -423,32 +459,54 @@ def pseudorange_residuals(pseudoranges: dict[tuple[int, str], float]) -> dict[tu
     但可以稳定提供模型所需的第四个输入特征，并且不依赖额外星历下载。
     """
 
+    # === 第一步：按卫星把 (时间, 伪距) 重新分组成"轨迹" ===
+    # 输入 pseudoranges 的 key 是 (utc_time, satellite_id)，是按"时刻×卫星"散开的；
+    # 而残差是沿时间方向的差分，必须先把同一颗卫星的所有历元聚到一起。
+    # tracks[satellite_id] = [(t0, r0), (t1, r1), ...]，每颗星一条时间序列。
     tracks: dict[str, list[tuple[int, float]]] = defaultdict(list)
     for (utc_time, satellite_id), pseudorange in pseudoranges.items():
         tracks[satellite_id].append((utc_time, pseudorange))
 
     residuals: dict[tuple[int, str], float] = {}
     for satellite_id, track in tracks.items():
-        # 每颗卫星独立处理，因为不同卫星的几何距离和运动趋势不同。
-        track.sort()
+        # 每颗卫星独立处理，因为不同卫星的几何距离和运动趋势不同：
+        # 接近天顶的星伪距变化慢、贴近地平的星变化快，不能混在一起估变化率。
+        # 字典插入顺序不保证按时间，差分前必须排序；元组排序默认按第 0 项(时间)升序。
+        track.sort() # 按时间升序排序，确保后续差分计算正确。每条轨迹的第一个点没有历史可预测，残差置 0。
+
+        # === 第二步：估计该卫星这一段的"典型变化率"(米/秒) ===
+        # 对相邻历元两两求斜率 (Δ伪距 / Δt)，得到一组逐点变化率。
+        # 条件 current_time > previous_time 既防止除零，也跳过重复时间戳。
         rates = [
             (current_range - previous_range) / (current_time - previous_time)
             for (previous_time, previous_range), (current_time, current_range) in zip(track, track[1:])
             if current_time > previous_time
         ]
-        # 用中位数而不是均值，降低伪距突跳对“典型变化率”的影响。
+        # 用中位数而不是均值，降低伪距突跳/野值对"典型变化率"的影响：
+        # 均值会被个别大跳变拉偏，中位数对这种离群点稳健。
+        # 注意这是简化的中位数(偶数个时直接取上中位，不做两数平均)，对本特征已足够。
+        # rates 为空(该卫星只有 1 个历元)时退化为 0.0。
         typical_rate = sorted(rates)[len(rates) // 2] if rates else 0.0
+
+        # === 第三步：沿时间做一步预测，残差 = |实测 - 预测| ===
+        # 思想：如果伪距是"平稳"演化的，用上一历元 + 典型变化率外推就应接近本历元；
+        # 一旦发生码伪距突跳、遮挡或多路径，实测就会明显偏离这条平稳外推线，
+        # 偏差(残差)随之变大——这正是我们想喂给模型的异常信号。
         previous_time: int | None = None
         previous_range: float | None = None
         for utc_time, pseudorange in track:
             if previous_time is None or previous_range is None or utc_time <= previous_time:
-                # 每条卫星轨迹的第一个点没有历史可预测，残差置 0。
+                # 每条卫星轨迹的第一个点没有历史可预测，残差置 0；
+                # utc_time <= previous_time 兜底处理重复/乱序时间戳。
                 residual = 0.0
             else:
                 dt = utc_time - previous_time
+                # 用上一历元伪距 + 典型变化率 × 时间间隔，外推出本历元的"预期伪距"。
                 predicted = previous_range + typical_rate * dt
+                # 实测与预期之差取绝对值：只关心偏离幅度，不分方向。
                 residual = abs(pseudorange - predicted)
-            residuals[(utc_time, satellite_id)] = residual
+            residuals[(utc_time, satellite_id)] = residual # 伪距残差特征，供后续与 NMEA 特征、GT 标签合并成训练表。
+            # 滚动更新"上一历元"，供下一个点做一步预测(逐点递推)。
             previous_time = utc_time
             previous_range = pseudorange
     return residuals
@@ -464,53 +522,79 @@ def build_dataset(
 ) -> list[dict[str, str | float | int]]:
     """合并所有来源，生成训练 CSV 的行列表。
 
-    合并条件是 `(utc_time, satellite_id)`：
+    本函数是整个数据集构建流程的"汇聚点"：前面的步骤分别从不同原始文件解析出
+    NMEA 观测、RINEX 伪距残差、车辆真值轨迹、天空遮挡掩膜；这里把它们按统一的键
+    拼成一张扁平训练表，每一行就是一个 (历元, 卫星) 样本，可直接喂给训练代码。
 
-    - NMEA 提供 cn0/elevation/azimuth
-    - RINEX 残差提供 pseudorange_residual
-    - groundtruth 提供这个 utc_time 的车辆位置
-    - skymask 根据车辆位置提供遮挡仰角，用来生成 label
+    合并的主键是 `(utc_time, satellite_id)`，四类来源各贡献一部分字段：
 
-    如果某个 NMEA 观测找不到 groundtruth 或 RINEX 残差，就跳过。这样输出表中
-    每一行都是完整训练样本，不需要训练代码再处理缺失值。
+    - NMEA       提供 cn0 / elevation / azimuth（卫星观测量，逐星逐历元）
+    - RINEX 残差 提供 pseudorange_residual（上一步算好的伪距异常特征）
+    - groundtruth 按 utc_time 提供车辆这一秒的真实位置（与卫星无关，整秒共用）
+    - skymask    根据车辆位置给出各方位角的建筑遮挡仰角，用来判定 LOS/NLOS 标签
+
+    主循环以 NMEA 观测为驱动：逐条 NMEA 记录去补齐 groundtruth 和残差，任一来源
+    缺失就整行跳过（continue）。因此输出表里每一行都是字段完整的训练样本，训练
+    代码无需再处理缺失值（NaN）。
+
+    Returns:
+        行字典组成的列表。若没有任何观测能完整对齐（如各来源时间戳不重叠），
+        抛 ValueError，避免悄悄写出空 CSV。
     """
 
-    # 同一秒所有卫星的车辆位置相同，因此最近 skymask 也相同。
-    # 缓存可以避免对同一个 utc_time 重复做最近邻搜索。
+    # mask_cache: utc_time -> 最近的 SkyMask。
+    # 同一秒内所有卫星共享同一个车辆位置，对应的最近邻掩膜自然也相同；用 utc_time
+    # 做缓存键，可避免对同一秒里的每颗卫星都重复跑一次 nearest_skymask 最近邻搜索。
     mask_cache: dict[int, SkyMask] = {}
     rows: list[dict[str, str | float | int]] = []
-    for key, measurement in sorted(nmea.items()):
+
+    # 按 (utc_time, satellite_id) 升序遍历：保证输出行顺序确定、可复现，且同一历元的
+    # 多颗卫星相邻排列，便于人工核对，也方便下游按时间切窗口。
+    for key, measurement in sorted(nmea.items()): # 先按照 utc_time 升序排序，如果 utc_time 相同则按照 satellite_id 升序排序，保证输出行顺序确定、可复现。
         utc_time, satellite_id = key
+
+        # === 对齐检查：三来源都要覆盖到这条 NMEA 观测，否则该行不完整，整行丢弃 ===
+        # 1) 缺这一秒的车辆真值 -> 无法定位、取不到 skymask、生成不了标签。
         if utc_time not in groundtruth:
             continue
+        # 2) 缺这颗星这一历元的伪距残差 -> 少一个特征列，丢弃以免引入缺失值。
         if key not in residuals:
             continue
+
+        # === 取这一秒车辆位置对应的天空遮挡掩膜（带缓存）===
         if utc_time not in mask_cache:
             mask_cache[utc_time] = nearest_skymask(groundtruth[utc_time], skymasks)
-        mask = mask_cache[utc_time].mask
+        mask = mask_cache[utc_time].mask  # mask[方位角] = 该方向建筑物的遮挡仰角(度)
 
-        # skymask 的索引是整数方位角 0..360；NMEA 方位角也是角度，这里四舍五入。
-        # Python 的 % 361 可以兜住 360 度这个合法索引。
+        # === 按卫星方位角查该方向的建筑遮挡仰角 ===
+        # skymask 索引是整数方位角 0..360；NMEA 方位角是浮点角度，先四舍五入成整数。
+        # 再对 361 取模：把可能出现的 360 度安全映射到合法索引（0..360 共 361 个）。
         azimuth_index = int(round(measurement.azimuth)) % 361
         horizon_elevation = mask[azimuth_index]
 
+        # === 生成 LOS/NLOS 标签 ===
         # label 约定来自 README_CN.md 和训练指标：
-        #   1 = LOS
-        #   0 = NLOS
-        # 如果卫星仰角高于建筑遮挡仰角，就认为卫星在可见天空区域内。
+        #   1 = LOS （视距，卫星直接可见）
+        #   0 = NLOS（非视距，信号被建筑遮挡/反射）
+        # 判据：卫星实测仰角 > 该方位的建筑遮挡仰角，说明卫星高过天际线、直接可见。
         label = 1 if measurement.elevation > horizon_elevation else 0
+
+        # === 拼出一行训练样本：标识列 + 标签 + 四个特征列 ===
         rows.append(
             {
-                "location_id": location_id,
-                "epoch": utc_time,
-                "satellite_id": satellite_id,
-                "label": label,
-                "cn0": measurement.cn0,
-                "elevation": measurement.elevation,
-                "azimuth": measurement.azimuth,
-                "pseudorange_residual": residuals[key],
+                "location_id": location_id,             # 采集地点标识，跨域实验区分数据来源
+                "epoch": utc_time,                      # 历元(秒)，时间标识
+                "satellite_id": satellite_id,           # 卫星编号，样本标识
+                "label": label,                         # 训练目标：LOS=1 / NLOS=0
+                "cn0": measurement.cn0,                 # 载噪比，特征
+                "elevation": measurement.elevation,     # 卫星仰角，特征
+                "azimuth": measurement.azimuth,         # 卫星方位角，特征
+                "pseudorange_residual": residuals[key], # 伪距残差，特征
             }
         )
+
+    # 一行都没生成，通常意味着各来源时间戳完全不重叠（解析、时区或时间对齐出了问题）。
+    # 早抛错比悄悄返回空表更利于定位问题。
     if not rows:
         raise ValueError("No rows were generated. Check that NMEA, RINEX, and groundtruth times overlap.")
     return rows
@@ -519,11 +603,14 @@ def build_dataset(
 def write_dataset(path: Path, rows: list[dict[str, str | float | int]]) -> None:
     """把生成的行写成训练脚本可直接读取的 CSV。"""
 
+    # 确保输出目录存在：parents=True 递归创建多级目录，exist_ok=True 让目录已存在时不报错。
     path.parent.mkdir(parents=True, exist_ok=True)
+    # newline="" 交给 csv 模块自己处理换行，避免在 Windows 上写出多余的空行。
     with path.open("w", encoding="utf-8", newline="") as handle:
+        # DictWriter 按 OUTPUT_COLUMNS 的顺序把每行字典映射到固定的列，保证列顺序稳定、与训练脚本约定一致。
         writer = csv.DictWriter(handle, fieldnames=OUTPUT_COLUMNS)
-        writer.writeheader()
-        writer.writerows(rows)
+        writer.writeheader()   # 先写表头行（列名）。
+        writer.writerows(rows)  # 再一次性写入所有数据行。
 
 
 def parse_args() -> argparse.Namespace:
