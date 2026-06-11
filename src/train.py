@@ -76,6 +76,7 @@ def train(args: argparse.Namespace) -> None:
     set_seed(args.seed)
     # 如果命令行没有指定 --device，就优先使用 CUDA；没有 GPU 时回退到 CPU。
     device = torch.device(args.device if args.device else ("cuda" if torch.cuda.is_available() else "cpu"))
+    print(f"Using device: {device}")
 
     # 读取并清洗 CSV，返回已经标准化列名、转换数值类型、按轨迹排序的记录。
     frame = read_measurements(args.data)
